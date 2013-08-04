@@ -10,9 +10,11 @@ import bintrees
 
 import roadmap_basic as ROAD
 
-
 # to construct the optimization problem
 import cvxpy
+
+
+
 
 class WeightedSet :
     def __init__(self, weight_dict ) :
@@ -35,30 +37,25 @@ class WeightedSet :
         return res
 
 
-
-
-def MATCH( P, Q, z=0 ) :
-    PP = sorted([ (p,i) for i,p in enumerate(P) ])
-    QQ = sorted([ (q,j) for j,q in enumerate(Q) ])
+""" matching """
+def MATCH( P, Q, length, z=0 ) :
+    PP = sorted(P)
+    QQ = sorted(Q)
+    if z > 0 : PP = [ 0. for i in xrange( z ) ] + PP
+    if z < 0 : QQ = [ 0. for i in xrange( -z ) ] + QQ
     
-    I = [ i for p,i in PP ]
-    J = [ j for q,j in QQ ]
-    I = I[-z:] + I[:-z]
-    return zip( I, J )
+    surp = len(PP) - len(QQ)
+    if surp > 0 : QQ = QQ + [ length for i in xrange( surp ) ]
+    if surp < 0 : PP = PP + [ length for i in xrange( -surp ) ]
+    
+    return zip(PP,QQ)
 
-def MATCHCOST( P, Q, M, circum ) :
-    cost = 0.
-    for i,j in M :
-        c1 = abs( Q[j] - P[i] )
-        c2 = circum - c1
-        cost += min( c1, c2 )
-    return cost
-
-
+def MATCHCOST( P, Q, length, z=0 ) :
+    return sum([ np.abs(q-p) for p,q in MATCH( P, Q, length, z) ])
 
 
 def obtain_segment_objective( P, Q, length ) :
-    # Step 1. Construct F
+    # prepare the points index
     points = bintrees.RBTree()
     points.insert( 0., 0 )
     points.insert( length, 0 )
@@ -100,6 +97,7 @@ def obtain_segment_objective( P, Q, length ) :
 
 
 
+
 def evalC( z, Ctree ) :
     """ this is the O(log n) query function """
     _, ( kappa, alpha ) = Ctree.floor_item( -z )
@@ -116,7 +114,7 @@ def drawCBounds( ZZ, Ctree, ax=None ) :
         C = kappa + alpha * ZZ
         ax.plot( ZZ, C, c='k', linestyle='--' )
     #ax.set_aspect( 'equal' )
-
+    return ax
 
 
 
@@ -145,6 +143,7 @@ if __name__ == '__main__' :
         return (road,y)
     
     NUMPOINT = 10
+    ZZ = np.linspace(-NUMPOINT,NUMPOINT,1000)
     def shatter( points, roadnet ) :
         P = dict()
         for _,__,road in roadnet.edges_iter( keys=True ) : P[road] = []
@@ -156,27 +155,30 @@ if __name__ == '__main__' :
     P = shatter( PP, roadnet )
     Q = shatter( QQ, roadnet )
     
-    PR = [ ROAD.RoadAddress( road, y ) for road, y in PP ]
-    QR = [ ROAD.RoadAddress( road, y ) for road, y in QQ ]
+    if False :      # compare to optimal matching
+        PR = [ ROAD.RoadAddress( road, y ) for road, y in PP ]
+        QR = [ ROAD.RoadAddress( road, y ) for road, y in QQ ]
+        
+        class pointnode() :
+            def __init__(self, point ) :
+                self.point = point
+        RED = [ pointnode(p) for p in PR ]
+        BLU = [ pointnode(q) for q in QR ]
+        graph = nx.Graph()
+        match_mat = np.zeros((NUMPOINT,NUMPOINT))
+        for (i,r), (j,b) in itertools.product( enumerate(RED), enumerate(BLU) ) :
+            w = ROAD.distance( roadnet, r.point, b.point, 'length' )
+            graph.add_edge( r, b, weight=-w )
+            match_mat[i,j] = w
+        match_dict = nx.max_weight_matching( graph, True )
+        
+        print 'got match'
+        match = [ (r,match_dict[r]) for r in RED ]      # match pruning
+        matchstats = [ ( r.point, b.point, ROAD.distance( roadnet, r.point, b.point, 'length' ) )
+                      for r,b in match ]
+        matchcost = sum([ c for r,b,c in matchstats ])
     
-    # solve for optimal flow
-    class pointnode() :
-        def __init__(self, point ) :
-            self.point = point
-    RED = [ pointnode(p) for p in PR ]
-    BLU = [ pointnode(q) for q in QR ]
-    graph = nx.Graph()
-    for r,b in itertools.product( RED, BLU ) :
-        w = ROAD.distance( roadnet, r.point, b.point, 'length' )
-        graph.add_edge( r, b, weight=-w )
-    match_dict = nx.max_weight_matching( graph, True )
-    print 'got match'
-    match = [ (r,match_dict[r]) for r in RED ]      # match pruning
-    matchstats = [ ( r.point, b.point, ROAD.distance( roadnet, r.point, b.point, 'length' ) )
-                  for r,b in match ]
-    matchcost = sum([ c for r,b,c in matchstats ])
-
-    
+    # compute the level intervals of C(z;road)
     CTREES = dict()
     for road in P :
         L = get_road_data( road, roadnet ).get( 'length', 1 )
@@ -213,9 +215,9 @@ if __name__ == '__main__' :
     # the cost-form constraints
     for road in cost :
         for f, (kappa,alpha) in CTREES[road].iter_items() : 
+            # is this plus or minus alpha?
             LB = cvxpy.geq( cost[road], kappa + alpha * assist[road] )
             CONSTRAINTS.append( LB )
-        
     
     prog = cvxpy.program( OBJECTIVE, CONSTRAINTS )
     
@@ -225,11 +227,41 @@ if __name__ == '__main__' :
         for constr in CONSTRAINTS :
             print str( constr )
     showprog( prog )
-    ZZ = np.linspace(-NUMPOINT/2,NUMPOINT/2,1000)
     #print dict([ (road,help.value) for road, help in assist ])
     
-    prog.solve()
     
-    
-    
+    if True :      # solve the LP
+        prog.solve()
+        
+        for road in CTREES :
+            ax = drawCBounds( ZZ, CTREES[road] )
+            ax.set_title('road=%s' % road )
+            zr = assist[road].value
+            Cr = evalC( zr, CTREES[road] )
+            #ax.axvline( assist[road].value )
+            ax.scatter( [ zr ], [ Cr ], marker='o' )
+            ax.scatter( [ zr ], [ cost[road].value ], marker='x' )
+            
+        dC = dict()
+        for road in assist :
+            zr = assist[road].value
+            f, (kappa,alpha) = CTREES[road].floor_item( -zr )
+            dC[road] = alpha
+        
+    if False :       # validate CTREES
+        zmin = -NUMPOINT/2
+        zmax = NUMPOINT/2
+        ZZZ = range( zmin, zmax )
+        #
+        for road, C in CTREES.iteritems() :
+            ax = drawCBounds( ZZ, CTREES[road] )
+            #Cz = np.array([ evalC( z, C ) for z in ZZ ])
+            #plt.plot( ZZ, Cz, linestyle='--' )
+            
+            width = get_road_data( road, roadnet ).get( 'length', 1 )
+            Cmatch = [ MATCHCOST( P[road], Q[road], width, z ) for z in ZZZ ]
+            plt.scatter( ZZZ, Cmatch, marker='x' )
+                
+            
+        
     
