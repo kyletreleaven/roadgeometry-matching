@@ -155,29 +155,6 @@ if __name__ == '__main__' :
     P = shatter( PP, roadnet )
     Q = shatter( QQ, roadnet )
     
-    if False :      # compare to optimal matching
-        PR = [ ROAD.RoadAddress( road, y ) for road, y in PP ]
-        QR = [ ROAD.RoadAddress( road, y ) for road, y in QQ ]
-        
-        class pointnode() :
-            def __init__(self, point ) :
-                self.point = point
-        RED = [ pointnode(p) for p in PR ]
-        BLU = [ pointnode(q) for q in QR ]
-        graph = nx.Graph()
-        match_mat = np.zeros((NUMPOINT,NUMPOINT))
-        for (i,r), (j,b) in itertools.product( enumerate(RED), enumerate(BLU) ) :
-            w = ROAD.distance( roadnet, r.point, b.point, 'length' )
-            graph.add_edge( r, b, weight=-w )
-            match_mat[i,j] = w
-        match_dict = nx.max_weight_matching( graph, True )
-        
-        print 'got match'
-        match = [ (r,match_dict[r]) for r in RED ]      # match pruning
-        matchstats = [ ( r.point, b.point, ROAD.distance( roadnet, r.point, b.point, 'length' ) )
-                      for r,b in match ]
-        matchcost = sum([ c for r,b,c in matchstats ])
-    
     # compute the level intervals of C(z;road)
     CTREES = dict()
     for road in P :
@@ -209,7 +186,11 @@ if __name__ == '__main__' :
         for _,__,road in roadnet.out_edges( u, keys=True ) :
             OUTFLOWS.append( assist[road] )
             
-        conserve_u = cvxpy.eq( sum(OUTFLOWS), sum(INFLOWS) )
+        #conserve_u = cvxpy.eq( sum(OUTFLOWS), sum(INFLOWS) )
+        #
+        error_u = sum(OUTFLOWS) - sum(INFLOWS)
+        conserve_u = cvxpy.leq( cvxpy.abs( error_u ), .0001 )
+        
         CONSTRAINTS.append( conserve_u )
         
     # the cost-form constraints
@@ -232,6 +213,15 @@ if __name__ == '__main__' :
     
     if True :      # solve the LP
         prog.solve()
+        print 'cost "predicted": %f' % prog.objective.value
+        
+        print 'solution:'
+        print [ a.value for a in assist.values() ]
+        if False :
+            violations = [ ( str(c), c.left.value, c.right.value, c.left.value >= c.right.value )
+                          for c in CONSTRAINTS
+                          if not c.left.value >= c.right.value ]
+            for v in violations : print v
         
         for road in CTREES :
             ax = drawCBounds( ZZ, CTREES[road] )
@@ -248,6 +238,31 @@ if __name__ == '__main__' :
             f, (kappa,alpha) = CTREES[road].floor_item( -zr )
             dC[road] = alpha
         
+    if True :      # compare to optimal matching
+        PR = [ ROAD.RoadAddress( road, y ) for road, y in PP ]
+        QR = [ ROAD.RoadAddress( road, y ) for road, y in QQ ]
+        
+        class pointnode() :
+            def __init__(self, point ) :
+                self.point = point
+        RED = [ pointnode(p) for p in PR ]
+        BLU = [ pointnode(q) for q in QR ]
+        graph = nx.Graph()
+        match_mat = np.zeros((NUMPOINT,NUMPOINT))
+        for (i,r), (j,b) in itertools.product( enumerate(RED), enumerate(BLU) ) :
+            w = ROAD.distance( roadnet, r.point, b.point, 'length' )
+            graph.add_edge( r, b, weight=-w )
+            match_mat[i,j] = w
+        match_dict = nx.max_weight_matching( graph, True )
+        
+        match = [ (r,match_dict[r]) for r in RED ]      # match pruning
+        matchstats = [ ( r.point, b.point, ROAD.distance( roadnet, r.point, b.point, 'length' ) )
+                      for r,b in match ]
+        matchcost = sum([ c for r,b,c in matchstats ])
+        print 'optimal match has cost: %f' % matchcost
+
+        
+        
     if False :       # validate CTREES
         zmin = -NUMPOINT/2
         zmax = NUMPOINT/2
@@ -261,7 +276,10 @@ if __name__ == '__main__' :
             width = get_road_data( road, roadnet ).get( 'length', 1 )
             Cmatch = [ MATCHCOST( P[road], Q[road], width, z ) for z in ZZZ ]
             plt.scatter( ZZZ, Cmatch, marker='x' )
-                
             
-        
-    
+            
+            
+            
+            
+            
+            
