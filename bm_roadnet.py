@@ -1,10 +1,15 @@
 
+import itertools
+
 import numpy as np
 import matplotlib.pyplot as plt
 plt.close('all')
 
 import networkx as nx
 import bintrees
+
+import roadmap_basic as ROAD
+
 
 # to construct the optimization problem
 import cvxpy
@@ -95,11 +100,29 @@ def obtain_segment_objective( P, Q, length ) :
 
 
 
+def evalC( z, Ctree ) :
+    """ this is the O(log n) query function """
+    _, ( kappa, alpha ) = Ctree.floor_item( -z )
+    return kappa + alpha * z
+
+def drawCBounds( ZZ, Ctree, ax=None ) :
+    if ax is None :
+        plt.figure()
+        ax = plt.gca()
+        
+    Cref = np.array([ evalC( z, Ctree ) for z in ZZ ]) 
+    ax.plot( ZZ, Cref, c='b', linewidth=3, alpha=.25 )
+    for f, (kappa, alpha) in Ctree.iter_items() :
+        C = kappa + alpha * ZZ
+        ax.plot( ZZ, C, c='k', linestyle='--' )
+    #ax.set_aspect( 'equal' )
+
+
+
 
 
 
 if __name__ == '__main__' :
-    
     roadnet = nx.MultiDiGraph()
     roadnet.add_edge( 0,1, 'N', length=1. )
     roadnet.add_edge( 1,2, 'E', length=1. )
@@ -128,13 +151,36 @@ if __name__ == '__main__' :
         for road,y in points : P[road].append( y )
         return P
     #
-    P = shatter([ sample() for i in xrange(NUMPOINT) ], roadnet )
-    Q = shatter([ sample() for i in xrange(NUMPOINT) ], roadnet )
+    PP = [ sample() for i in xrange(NUMPOINT) ]
+    QQ = [ sample() for i in xrange(NUMPOINT) ]
+    P = shatter( PP, roadnet )
+    Q = shatter( QQ, roadnet )
     
-    OBJECTS = dict()
+    PR = [ ROAD.RoadAddress( road, y ) for road, y in PP ]
+    QR = [ ROAD.RoadAddress( road, y ) for road, y in QQ ]
+    
+    # solve for optimal flow
+    class pointnode() :
+        def __init__(self, point ) :
+            self.point = point
+    RED = [ pointnode(p) for p in PR ]
+    BLU = [ pointnode(q) for q in QR ]
+    graph = nx.Graph()
+    for r,b in itertools.product( RED, BLU ) :
+        w = ROAD.distance( roadnet, r.point, b.point, 'length' )
+        graph.add_edge( r, b, weight=-w )
+    match_dict = nx.max_weight_matching( graph, True )
+    print 'got match'
+    match = [ (r,match_dict[r]) for r in RED ]      # match pruning
+    matchstats = [ ( r.point, b.point, ROAD.distance( roadnet, r.point, b.point, 'length' ) )
+                  for r,b in match ]
+    matchcost = sum([ c for r,b,c in matchstats ])
+
+    
+    CTREES = dict()
     for road in P :
         L = get_road_data( road, roadnet ).get( 'length', 1 )
-        OBJECTS[road] = obtain_segment_objective( P[road], Q[road], L )
+        CTREES[road] = obtain_segment_objective( P[road], Q[road], L )
     
     """ construct the problem """
     surplus = dict()
@@ -143,29 +189,46 @@ if __name__ == '__main__' :
     
     for _,__,road in roadnet.edges_iter( keys=True ) :
         surplus[road] = len( P[road] ) - len( Q[road] )
-        assist[road] = cvxpy.variable()
-        cost[road] = cvxpy.variable()
+        assist[road] = cvxpy.variable( name='z_%s' % road )
+        cost[road] = cvxpy.variable( name='c_%s' % road )
         
-    OBJECTIVE = cvxpy.minimize( sum( cost.values() ) )
+    objfunc = sum( cost.values() )
+    OBJECTIVE = cvxpy.minimize( objfunc )
     
     CONSTRAINTS = []
     
     # the flow conservation constraints
     for u in roadnet.nodes_iter() :
-        inflow = sum([ assist[road] + surplus[road] for _,__,road in roadnet.in_edges( u, keys=True ) ])
-        outflow = sum([ assist[road] for _,__,road in roadnet.out_edges( u, keys=True ) ])
-        CONSTRAINTS.append( cvxpy.eq( outflow, inflow ) )
+        INFLOWS = []
+        for _,__,road in roadnet.in_edges( u, keys=True ) :
+            INFLOWS.append( assist[road] + surplus[road] )
+            
+        OUTFLOWS = []
+        for _,__,road in roadnet.out_edges( u, keys=True ) :
+            OUTFLOWS.append( assist[road] )
+            
+        conserve_u = cvxpy.eq( sum(OUTFLOWS), sum(INFLOWS) )
+        CONSTRAINTS.append( conserve_u )
         
     # the cost-form constraints
     for road in cost :
-        for f, (kappa,alpha) in OBJECTS[road].iter_items() :
-            partcost = kappa + alpha * assist[road]
-            CONSTRAINTS.append( cvxpy.geq( cost[road], partcost ) )
+        for f, (kappa,alpha) in CTREES[road].iter_items() : 
+            LB = cvxpy.geq( cost[road], kappa + alpha * assist[road] )
+            CONSTRAINTS.append( LB )
         
     
     prog = cvxpy.program( OBJECTIVE, CONSTRAINTS )
     
+    def showprog( prog ) :
+        print 'minimize %s' % str( objfunc )
+        print 'subject to:'
+        for constr in CONSTRAINTS :
+            print str( constr )
+    showprog( prog )
+    ZZ = np.linspace(-NUMPOINT/2,NUMPOINT/2,1000)
+    #print dict([ (road,help.value) for road, help in assist ])
     
+    prog.solve()
     
     
     
