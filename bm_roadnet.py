@@ -98,8 +98,6 @@ def obtain_segment_objective( P, Q, length ) :
 
 
 
-
-
 if __name__ == '__main__' :
     
     roadnet = nx.MultiDiGraph()
@@ -108,51 +106,65 @@ if __name__ == '__main__' :
     roadnet.add_edge( 2,3, 'S', length=1. )
     roadnet.add_edge( 3,0, 'W', length=1. )
     
+    def get_road_data( road, roadnet ) :
+        for _,__,key, data in roadnet.edges_iter( keys=True, data=True ) :
+            if key == road : return data
+            
     weight_dict = dict()
-    for u,v, road, data in roadnet.edges_iter( keys=True, data=True ) :
+    for _,__, road, data in roadnet.edges_iter( keys=True, data=True ) :
         weight_dict[road] = data.get( 'length', 1 )
         
     road_sampler = WeightedSet( weight_dict )
     def sample() :
-        s = road_sampler.sample()
-        for u,v, road, data in roadnet.edges_iter( keys=True, data=True ) :
-            if road == s :
-                L = data.get( 'length', 1 )
-                y = L * np.random.rand()
-                return (road,y)
+        road = road_sampler.sample()
+        L = get_road_data( road, roadnet ).get( 'length', 1 )
+        y = L * np.random.rand()
+        return (road,y)
     
-    
-    
-    
-    # obtain a BM problem instance by sampling
     NUMPOINT = 10
-    P = [ sample() for i in xrange(NUMPOINT) ]
-    Q = [ sample() for i in xrange(NUMPOINT) ]
+    def shatter( points, roadnet ) :
+        P = dict()
+        for _,__,road in roadnet.edges_iter( keys=True ) : P[road] = []
+        for road,y in points : P[road].append( y )
+        return P
+    #
+    P = shatter([ sample() for i in xrange(NUMPOINT) ], roadnet )
+    Q = shatter([ sample() for i in xrange(NUMPOINT) ], roadnet )
     
-    WIDTH = 1.
-    P = [ y for _,y in P ]
-    Q = [ y for _,y in Q ]
-    Czminus = obtain_segment_objective( P, Q, WIDTH )
-    def evalC( z ) :
-        _, ( kappa, alpha ) = Czminus.floor_item( -z )
-        return kappa + alpha * z
+    OBJECTS = dict()
+    for road in P :
+        L = get_road_data( road, roadnet ).get( 'length', 1 )
+        OBJECTS[road] = obtain_segment_objective( P[road], Q[road], L )
     
-    if True :
-        zmin = -NUMPOINT/2
-        zmax = NUMPOINT/2
-        zz = np.linspace( zmin, zmax, 1000 )
-        C = np.array([ evalC(z) for z in zz ])
+    """ construct the problem """
+    surplus = dict()
+    assist = dict()
+    cost = dict()
+    
+    for _,__,road in roadnet.edges_iter( keys=True ) :
+        surplus[road] = len( P[road] ) - len( Q[road] )
+        assist[road] = cvxpy.variable()
+        cost[road] = cvxpy.variable()
         
-        zzz = range( zmin, zmax+1 )
-        matches = [ MATCH( P, Q, z ) for z in zzz ]
-        Cz = [ MATCHCOST( P, Q, match, WIDTH ) for match in matches ]
+    OBJECTIVE = cvxpy.minimize( sum( cost.values() ) )
+    
+    CONSTRAINTS = []
+    
+    # the flow conservation constraints
+    for u in roadnet.nodes_iter() :
+        inflow = sum([ assist[road] + surplus[road] for _,__,road in roadnet.in_edges( u, keys=True ) ])
+        outflow = sum([ assist[road] for _,__,road in roadnet.out_edges( u, keys=True ) ])
+        CONSTRAINTS.append( cvxpy.eq( outflow, inflow ) )
         
-        plt.figure()
-        plt.plot(zz,C)
-        plt.scatter(zzz,Cz, marker='x')
+    # the cost-form constraints
+    for road in cost :
+        for f, (kappa,alpha) in OBJECTS[road].iter_items() :
+            partcost = kappa + alpha * assist[road]
+            CONSTRAINTS.append( cvxpy.geq( cost[road], partcost ) )
         
     
-    # augment Ctree with the offset as well
+    prog = cvxpy.program( OBJECTIVE, CONSTRAINTS )
+    
     
     
     
