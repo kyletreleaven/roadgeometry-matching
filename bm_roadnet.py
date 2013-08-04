@@ -9,6 +9,28 @@ import bintrees
 # to construct the optimization problem
 import cvxpy
 
+class WeightedSet :
+    def __init__(self, weight_dict ) :
+        """
+        keys are targets, values are weights; needn't sum to 1
+        doesn't check for repeats
+        """
+        targets = weight_dict.keys()
+        weights = weight_dict.values()
+        scores = np.cumsum( np.array( weights ) )
+        
+        self._hiscore = scores[-1]
+        self._tree = bintrees.RBTree()
+        for target, score in zip( targets, scores ) :
+            self._tree.insert( score, target )
+            
+    def sample(self) :
+        z = self._hiscore * np.random.rand()
+        _, res = self._tree.ceiling_item( z )
+        return res
+
+
+
 
 def MATCH( P, Q, z=0 ) :
     PP = sorted([ (p,i) for i,p in enumerate(P) ])
@@ -79,16 +101,37 @@ def obtain_segment_objective( P, Q, length ) :
 
 
 if __name__ == '__main__' :
-    # sampling utility
-    WIDTH = 1.
+    
+    roadnet = nx.MultiDiGraph()
+    roadnet.add_edge( 0,1, 'N', length=1. )
+    roadnet.add_edge( 1,2, 'E', length=1. )
+    roadnet.add_edge( 2,3, 'S', length=1. )
+    roadnet.add_edge( 3,0, 'W', length=1. )
+    
+    weight_dict = dict()
+    for u,v, road, data in roadnet.edges_iter( keys=True, data=True ) :
+        weight_dict[road] = data.get( 'length', 1 )
+        
+    road_sampler = WeightedSet( weight_dict )
     def sample() :
-        return WIDTH * np.random.rand()
+        s = road_sampler.sample()
+        for u,v, road, data in roadnet.edges_iter( keys=True, data=True ) :
+            if road == s :
+                L = data.get( 'length', 1 )
+                y = L * np.random.rand()
+                return (road,y)
+    
+    
+    
     
     # obtain a BM problem instance by sampling
     NUMPOINT = 10
     P = [ sample() for i in xrange(NUMPOINT) ]
     Q = [ sample() for i in xrange(NUMPOINT) ]
     
+    WIDTH = 1.
+    P = [ y for _,y in P ]
+    Q = [ y for _,y in Q ]
     Czminus = obtain_segment_objective( P, Q, WIDTH )
     def evalC( z ) :
         _, ( kappa, alpha ) = Czminus.floor_item( -z )
