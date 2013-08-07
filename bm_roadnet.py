@@ -9,6 +9,7 @@ import networkx as nx
 import bintrees
 
 import roadmap_basic as ROAD
+import astar_basic as ASTAR
 
 # to construct the optimization problem
 import cvxpy
@@ -52,6 +53,114 @@ def MATCH( P, Q, length, z=0 ) :
 
 def MATCHCOST( P, Q, length, z=0 ) :
     return sum([ np.abs(q-p) for p,q in MATCH( P, Q, length, z) ])
+
+
+
+
+
+def ROADMATCH( P, Q, Z, roadnet ) :
+    match, match_queues = roadmatch_split( P, Q, Z, roadnet )
+    
+    # create demand graph
+    digraph = nx.DiGraph()
+    POS = []
+    NEG = []
+    for tup, q in match_queues.iteritems() :
+        road,u, theta = tup
+        digraph.add_node( tup, demand=-theta*len(q) )
+        if theta > 0 :
+            POS.append( tup )
+        else :
+            NEG.append( tup )
+        
+    # add shortest-path length edges
+    for tup1, tup2 in itertools.product( POS, NEG ) :
+        _,u1,__ = tup1
+        _,u2,__ = tup2
+        w = ASTAR.astar_path_length( roadnet, u1, u2, weight='length' )
+        digraph.add_edge( tup1, tup2, weight=w )
+        
+    MATCH = nx.min_cost_flow( digraph )        # all labels default
+    for tup1, row in MATCH.iteritems() :
+        road1,_,__ = tup1
+        for tup2, z in row.iteritems() :
+            road2,_,__ = tup2
+            for i in xrange(z) :
+                y1 = match_queues[tup1].pop(0)
+                y2 = match_queues[tup2].pop(0)
+                match.append( ( (road1,y1), (road2,y2) ) )
+                
+    return match
+
+
+def roadmatch_split( P, Q, Z, roadnet ) :
+    """
+    P and Q are equal len lists of (r,y)
+    Z is a dict of road -> int
+    roadnet is a road network multi-digraph
+    """
+    res = []
+    
+    # Step 1. Organize the points
+    PP = dict()
+    QQ = dict()
+    for _,__,road in roadnet.edges_iter( keys=True ) :
+        PP[road] = bintrees.RBTree()
+        QQ[road] = bintrees.RBTree()
+        
+    for road, y in P : PP[road].insert( y, None )
+    for road, y in Q : QQ[road].insert( y, None )
+    
+    # Step 2. Populate "endpoint queues".
+    QUEUES = dict()
+    
+    for u,v, road in roadnet.edges_iter( keys=True ) :
+        # Step 2a. Populate left end with biases.
+        z = Z.get( road, 0 )
+        q = []
+        if z > 0 :
+            # get first z electrons
+            tree = QQ[road]
+            tup = (road,u,-1) ; QUEUES[tup] = q
+        if z < 0 :
+            # get first z protons
+            tree = PP[road]
+            tup = (road,u,+1) ; QUEUES[tup] = q
+            
+        for i in xrange( abs(z) ) :
+            if len(tree) <= 0 : break
+            y, _ = tree.pop_min()
+            q.append( y )
+            
+        # Step 2b. Populate right end after a traversal
+        Pr = PP[road]
+        Qr = QQ[road]
+        M = min( len(Pr), len(Qr) )
+        delta = len(Pr) - len(Qr)
+        for i in xrange(M) :
+            p, _ = Pr.pop_min()
+            q, _ = Qr.pop_min()
+            res.append( ( (road,p), (road,q) ) )
+        if delta > 0 :
+            QUEUES[(road,v,+1)] = [ k for k in Pr.keys() ]
+        elif delta < 0 :
+            QUEUES[(road,v,-1)] = [ k for k in Qr.keys() ]
+        
+    return res, QUEUES
+
+
+
+
+def ROADMATCHCOST( match, roadnet ) :
+    costs = []
+    for c1, c2 in match :
+        p = ROAD.RoadAddress( *c1 )
+        q = ROAD.RoadAddress( *c2 )
+        d = ROAD.distance( roadnet, p, q, 'length' )
+        costs.append( d )
+    return sum( costs )
+
+
 
 
 def obtain_segment_objective( P, Q, length ) :
@@ -142,7 +251,7 @@ if __name__ == '__main__' :
         y = L * np.random.rand()
         return (road,y)
     
-    NUMPOINT = 10
+    NUMPOINT = 10000
     ZZ = np.linspace(-NUMPOINT,NUMPOINT,1000)
     def shatter( points, roadnet ) :
         P = dict()
@@ -211,7 +320,9 @@ if __name__ == '__main__' :
     #print dict([ (road,help.value) for road, help in assist ])
     
     
-    if True :      # solve the LP
+    # the *optimal* algorithm
+    if True :
+        # compute optimal matching cost by solving the LP
         prog.solve()
         print 'cost "predicted": %f' % prog.objective.value
         
@@ -223,6 +334,7 @@ if __name__ == '__main__' :
                           if not c.left.value >= c.right.value ]
             for v in violations : print v
         
+        # validate C's of the different roads
         for road in CTREES :
             ax = drawCBounds( ZZ, CTREES[road] )
             ax.set_title('road=%s' % road )
@@ -237,8 +349,19 @@ if __name__ == '__main__' :
             zr = assist[road].value
             f, (kappa,alpha) = CTREES[road].floor_item( -zr )
             dC[road] = alpha
-        
-    if True :      # compare to optimal matching
+            
+        # compute a matching and verify cost
+        matchZ = dict()
+        for road, var in assist.iteritems() :
+            matchZ[road] = int( round( var.value ) )
+        the_match = ROADMATCH( PP, QQ, matchZ, roadnet )
+        the_match_cost = ROADMATCHCOST( the_match, roadnet )
+        print 'constructed matching has cost: %f' % the_match_cost
+            
+            
+            
+    # compare to optimal matching
+    if False and NUMPOINT <= 100 :      
         PR = [ ROAD.RoadAddress( road, y ) for road, y in PP ]
         QR = [ ROAD.RoadAddress( road, y ) for road, y in QQ ]
         
