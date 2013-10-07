@@ -53,7 +53,11 @@ class mygraph :
         
     def nodes(self) : return self.V.keys()
     
+    def has_node(self, i ) : return i in self.V
+    
     def edges(self) : return self.E.keys()
+    
+    def has_edge(self, e ) : return e in self.E
         
     def endpoints(self, e ) : return self.E[e]
         

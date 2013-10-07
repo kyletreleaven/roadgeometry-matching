@@ -1,4 +1,6 @@
 
+import numpy as np
+
 from mygraph import mygraph
 from priodict import *
 
