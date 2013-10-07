@@ -27,9 +27,6 @@ def Dijkstra( graph, cost, s ) :
                 
     return d, pred
                 
-                
-
-
 
 
 """ unit test """
