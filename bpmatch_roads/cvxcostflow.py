@@ -133,9 +133,13 @@ def MinCostConvexFlow( network, capacity, supply, cost, epsilon=None ) :
         # also will need to update relevant edge, after every augmentation
         LinearizeCost( lincost, flow, Delta, network, cost )    # all edges
         print 'local costs: %s' % repr( lincost )
+        
         rgraph = ResidualGraph( residual, network )
+        print 'residual graph %s' % rgraph.edges()
+        
         redcost = ReducedCost( lincost, potential, rgraph )
-        print 'redcost at beginning phase: %s' % repr( redcost )
+        print 'reduced cost, phase begin: %s' % repr( redcost )
+        
         # for every arc (i,j) in the residual network G(x)
         for resedge in rgraph.edges() :
             e,dir = resedge
@@ -149,10 +153,15 @@ def MinCostConvexFlow( network, capacity, supply, cost, epsilon=None ) :
                 # send rij flow along arc
                 flow[e] += dir * rcap
                 AugmentCapacity( residual, e, dir * rcap )
+                ResidualGraphEdge( rgraph, e, residual, network )
                 LinearizeCost( lincost, flow, Delta, network, cost, e )     # just modify one edge
+                
+                redcost = ReducedCost( lincost, potential, rgraph )
+                print 'reduced cost, correction: %s' % repr( redcost )
                 
         # while there are imbalanced nodes
         while True :
+            print 'flow: %s' % repr( flow )
             excess = Excess( flow, network, supply )
             print 'excess: %s' % repr(excess)
             
@@ -165,30 +174,37 @@ def MinCostConvexFlow( network, capacity, supply, cost, epsilon=None ) :
             s = SS[0] ; t = TT[0]
             print 'augmenting %s to %s' % ( repr(s), repr(t) )
             
+            print 'residual: %s' % repr( residual )
             Delta_rgraph = ResidualGraph( residual, network, Delta )
-            print 'flow: %s' % repr( flow )
-            print 'potentials: %s' % repr( potential )
             print 'Delta residual graph: %s' % repr( Delta_rgraph.edges() )
-            print 'reduced costs: %s' % repr( redcost )
-            dist, _ = Dijkstra( Delta_rgraph, redcost, s )
+            
+            print 'potential: %s' % repr( potential )
+            
+            redcost = ReducedCost( lincost, potential, rgraph )
+            print 'reduced cost, shortest paths: %s' % repr( redcost )
+            
+            dist, preds = Dijkstra( Delta_rgraph, redcost, s )
             print 'Dijkstra shortest paths: %s' % repr( dist )
+            print 'Dijkstra predecessors: %s' % repr( preds )
             
             # update the potentials and reduced costs
             for i in network.nodes() : potential[i] -= dist.get(i, np.Inf )
-            print 'potentials: %s' % repr( potential )
+            print 'new potentials: %s' % repr( potential )
             
             redcost = ReducedCost( lincost, potential, rgraph )
             print 'next reduced costs: %s' % repr( redcost )
             
             # find shortest path w.r.t. reduced costs
-            PATH = [] ; curr = t
-            while curr is not s :
-                UP = [ e for e in Delta_rgraph.W[curr] if redcost[e] <= 0. ]
-                edge = UP[0]
-                i,j = Delta_rgraph.endpoints(edge)
-                
-                PATH.insert( 0, edge )
-                curr = i
+            PATH = [] ; j = t
+            for i in range(10) :
+                if j is s : break
+            #while j is not s :
+                for e in Delta_rgraph.W[j] :
+                    i,_ = Delta_rgraph.endpoints(e)
+                    if i is preds[j] and redcost[e] <= 0. : break
+                print i,j
+                PATH.insert( 0, e )
+                j = i
             print 'using path: %s' % repr( PATH )
             
             # augment Delta flow along the path P
@@ -196,13 +212,15 @@ def MinCostConvexFlow( network, capacity, supply, cost, epsilon=None ) :
                 e,dir = edge
                 flow[e] += dir * Delta
                 AugmentCapacity( residual, e, dir * Delta )
+                
+                ResidualGraphEdge( Delta_rgraph, e, residual, network )
                 LinearizeCost( lincost, flow, Delta, network, cost, e )
                 
             # update stuff; but not really... 
             # flow already done; SS, TT, and Delta_rgraph at next loop begin
             
         # end the iteration
-        if Delta <= 1 : break
+        if Delta <= epsilon : break
         Delta = Delta / 2
     
     return flow
@@ -275,7 +293,7 @@ if __name__ == '__main__' :
     for e in c :
         cf[e] = line( c[e] )
     
-    flow = MinCostConvexFlow( g, u, supply, cf, epsilon=.01 )
+    flow = MinCostConvexFlow( g, u, supply, cf, epsilon=.001 )
     
     digraph = mincostflow_nx( g, u, supply, c )
     compare = nx.min_cost_flow( digraph )
