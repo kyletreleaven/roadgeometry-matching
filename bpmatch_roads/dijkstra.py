@@ -14,15 +14,14 @@ def Dijkstra( graph, cost, s ) :
     
     while len( OPEN ) > 0 :
         i = OPEN.smallest()
+        d[i] = OPEN[i]
         del OPEN[i]
         
         for e in graph.V[i] :
             _, j = graph.endpoints(e)
-            new_d = d[i] + cost.get( e, np.Inf )
-            
-            if j not in d : OPEN[j] = new_d
-            if new_d < d.get( j, np.Inf ) :
-                d[j] = new_d
+            dj = d[i] + cost.get( e, 0. )
+            if j not in d and dj < OPEN.get(j, np.Inf ) :
+                OPEN[j] = dj
                 pred[j] = i
                 
     return d, pred
