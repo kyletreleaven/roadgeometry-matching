@@ -11,19 +11,37 @@ from toposort import toposort
 
 """ Utility Algorithms """
 
-def Residual( graph, capacity, flow=None ) :
-    rcapacity = {}
-    if flow is None : flow = {}
-    
-    for e in graph.edges() :
+def Residual( residual, flow, capacity, network, edge=None ) :
+    if edge is None :
+        iter = network.edges()
+    else :
+        iter = [ edge ]
+        
+    for e in iter :
         u = capacity.get( e, np.Inf )
         x = flow.get( e, 0. )
         assert u >= 0. and x >= 0. and x <= u
         
-        rcapacity[(e,-1)] = x
-        rcapacity[(e,+1)] = u - x
+        residual[(e,-1)] = x
+        residual[(e,+1)] = u - x
         
-    return rcapacity
+
+def AugmentCapacity( rcapacity, e, x ) :
+    # query residual capacity in both directions
+    frwd = (e,+1)
+    bkwd = (e,-1)
+    
+    u_frwd = rcapacity.setdefault( frwd, np.Inf )
+    u_bkwd = rcapacity.setdefault( bkwd, np.Inf )
+    
+    assert x <= u_frwd
+    assert -x <= u_bkwd
+    
+    rcapacity[frwd] -= x
+    rcapacity[bkwd] += x
+
+    
+    
     
     
 def ResidualGraph( rgraph, rcapacity, network, Delta=None, edge=None ) :
@@ -42,28 +60,11 @@ def ResidualGraph( rgraph, rcapacity, network, Delta=None, edge=None ) :
             u = rcapacity[label]
             if u > Delta : rgraph.add_edge( label, ii, jj )
             
-        
-        
-def AugmentCapacity( rcapacity, e, x ) :
-    # query residual capacity in both directions
-    frwd = (e,+1)
-    bkwd = (e,-1)
-    
-    u_frwd = rcapacity.setdefault( frwd, np.Inf )
-    u_bkwd = rcapacity.setdefault( bkwd, np.Inf )
-    
-    assert x <= u_frwd
-    assert -x <= u_bkwd
-    
-    rcapacity[frwd] -= x
-    rcapacity[bkwd] += x
 
 
 
 
-
-
-def ReducedCost( cost, potential, graph ) :
+def ReducedCost( cost, potential, graph, edge=None ) :
     rcost = {}
     for e in graph.edges() :
         i,j = graph.endpoints(e)
@@ -214,11 +215,12 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
     potential = { i : 0. for i in network.nodes() }
     
     # initialize algorithm data
-    residual = Residual( network, capacity, flow )
+    residual = {}
     rgraph = mygraph()
     Delta_rgraph = mygraph()
-    
     lincost = {}
+    
+    Residual( residual, flow, capacity, network )   # compute residual capacities
     
     while Delta >= epsilon :
         print '\nnew phase: Delta=%f' % Delta
@@ -251,7 +253,8 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
                 
                 # send rij flow along arc --- modification: Delta flow
                 flow[e] += dir * Delta
-                AugmentCapacity( residual, e, dir * rcap )
+                Residual( residual, flow, capacity, network, e )
+                #AugmentCapacity( residual, e, dir * rcap )
                 ResidualGraph( rgraph, residual, network, edge=e )
                 LinearizeCost( lincost, flow, Delta, network, cost, e )     # just modify one edge
                 
@@ -307,8 +310,7 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
             for edge in PATH :
                 e,dir = edge
                 flow[e] += dir * Delta
-                AugmentCapacity( residual, e, dir * Delta )
-                
+                Residual( residual, flow, capacity, network, e )
                 ResidualGraph( Delta_rgraph, residual, network, edge=e )
                 LinearizeCost( lincost, flow, Delta, network, cost, e )
                 
