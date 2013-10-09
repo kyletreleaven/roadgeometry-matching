@@ -159,7 +159,7 @@ def SURPLUS( segment ) :
 
 
 def MEASURE( segment, length ) :
-    measure = dict()
+    measure = bintrees.RBTree()
     
     posts = [ 0. ] + [ y for y,q in segment.iter_items() ] + [ length ]
     intervals = zip( posts[:-1], posts[1:] )
@@ -193,8 +193,8 @@ def EDGES( segment ) :      # very similar routine, used to build the walk graph
 def OBJECTIVE( measure ) :
     # prepare constants kappa and alpha
     ff = np.array( [ -np.inf ] + [ f for f in measure ] )
-    PREALPHA = np.array( [ 0. ] + [ w for f,w in measure.iteritems() ] )
-    PREKAPPA = np.array( [ 0. ] + [ f*w for f,w in measure.iteritems() ] )
+    PREALPHA = np.array( [ 0. ] + [ w for f,w in measure.items() ] )
+    PREKAPPA = np.array( [ 0. ] + [ f*w for f,w in measure.items() ] )
     
     ALPHAM = np.cumsum( PREALPHA )
     ALPHAP = ALPHAM[-1] - ALPHAM
@@ -304,7 +304,7 @@ class costWrapper :
     def __call__(self, z ) :
         """ this is an O(log n) query function, can be reduced to O(1) by random access with saturation """
         _, line = self.lines.floor_item( -z )
-        return kappa + alpha * z
+        return line( z )
 
 
 
@@ -373,8 +373,7 @@ class UniformDist :
     
     
     
-
-
+    
 if __name__ == '__main__' :
     import matplotlib.pyplot as plt
     plt.close('all')
@@ -392,6 +391,16 @@ if __name__ == '__main__' :
     #
     PP = [ sampler.sample() for i in xrange(NUMPOINT) ]
     QQ = [ sampler.sample() for i in xrange(NUMPOINT) ]
+    
+    z = np.linspace(-NUMPOINT,NUMPOINT,1000)
+    objective_dict = WRITEOBJECTIVES( PP, QQ, roadnet )
+    for road, Cz in objective_dict.iteritems() :
+        cost = costWrapper( Cz )
+        C = [ cost(zz) for zz in z ]
+        plt.figure()
+        plt.plot( z, C )
+        
+        
     
     match = ROADSBIPARTITEMATCH( PP, QQ, roadnet )
     costs = MATCHCOSTS( match, PP, QQ, roadnet )
