@@ -1,2 +1,6 @@
 # compiled python
 *.pyc
+
+# backups
+*.bak
+*~
