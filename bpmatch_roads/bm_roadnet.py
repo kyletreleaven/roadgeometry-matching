@@ -1,26 +1,20 @@
 
-import os
 
 import itertools
-import tempfile
-import subprocess as subp
 
 import numpy as np
-import matplotlib.pyplot as plt
-plt.close('all')
-
-import networkx as nx
 import bintrees
 
+import networkx as nx
+
+""" my dependencies """
 import roadmap_basic as ROAD
 import astar_basic as ASTAR
 
-# to construct the optimization problem
-import cvxpy
+from bpmatch_roads.nxflow.capscaling import SOLVER
 
-def package_local( filename ) :
-    dirname = os.path.dirname( __file__ )
-    return os.path.join( dirname, filename )
+# to construct the optimization problem
+
 
 """ utility """
 
@@ -33,7 +27,7 @@ def get_road_data( road, roadnet ) :
         
 
 
-""" ALGORITHM BEGINS """
+""" ALGORITHM HIGH LEVEL """
 
 def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
     MATCH = []
@@ -53,7 +47,7 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
         objective_dict[road] = OBJECTIVE( measure )
         #objective_dict[road] = objective
         
-    assist = ASSIST2( roadnet, surplus_dict, objective_dict )
+    assist = SOLVER( roadnet, surplus_dict, objective_dict )
     
     topograph = TOPOGRAPH( segment_dict, assist, roadnet )
     
@@ -61,6 +55,27 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
     MATCH.extend( match )
     
     return MATCH
+
+
+def WRITEOBJECTIVES( P, Q, roadnet ) :
+    MATCH = []
+    
+    segment_dict = SEGMENTS( P, Q, roadnet )
+    surplus_dict = dict()
+    objective_dict = dict()
+    
+    for road, segment in segment_dict.iteritems() :
+        match = PREMATCH( segment )
+        MATCH.extend( match )
+        
+        surplus_dict[road] = SURPLUS( segment )
+        
+        roadlen = get_road_data( road, roadnet ).get( 'length', 1 )
+        measure = MEASURE( segment, roadlen )
+        objective_dict[road] = OBJECTIVE( measure )
+        #objective_dict[road] = objective
+        
+    return objective_dict
 
 
 """ Algorithm Utilities """
@@ -88,15 +103,11 @@ class LineData :
         self.slope = m
         self.offset = b
         
+    def __call__(self, x ) :
+        return self.slope * x + self.offset
+    
     def __repr__(self) :
         return '<%f z + %f>' % ( self.slope, self.offset )
-
-def showprog( prog ) :
-    # this is broken!
-    print 'minimize %s' % str( objfunc )
-    print 'subject to:'
-    for constr in CONSTRAINTS :
-        print str( constr )
 
 class terminal :    # simple node type for TRAVERSE
     def __init__(self, q ) :
@@ -200,179 +211,6 @@ def OBJECTIVE( measure ) :
     return Czminus
 
 
-def ASSIST( roadnet, surplus, objectives ) :
-    prog, assist = PROGRAM( roadnet, surplus, objectives )
-    prog.solve()
-    
-    res = dict()
-    for road, a in assist.iteritems() :
-        res[road] = int( round( a.value ) )
-        
-    return res
-    
-
-def PROGRAM( roadnet, surplus, objectives ) :
-    """ construct the program """
-    # optvars
-    assist = dict()
-    cost = dict()
-    DELTA = .00001   # cvxpy isn't quite robust to non-full dimensional optimization
-    
-    for _,__,road in roadnet.edges_iter( keys=True ) :
-        assist[road] = cvxpy.variable( name='z_{%s}' % road )
-        cost[road] = cvxpy.variable( name='c_{%s}' % road )
-    #print assist
-    #print cost
-        
-    objfunc = sum( cost.values() )
-    OBJECTIVE = cvxpy.minimize( objfunc )
-    
-    CONSTRAINTS = []
-    
-    # the flow conservation constraints
-    for u in roadnet.nodes_iter() :
-        INFLOWS = []
-        for _,__,road in roadnet.in_edges( u, keys=True ) :
-            INFLOWS.append( assist[road] + surplus[road] )
-            
-        OUTFLOWS = []
-        for _,__,road in roadnet.out_edges( u, keys=True ) :
-            OUTFLOWS.append( assist[road] )
-            
-        #conserve_u = cvxpy.eq( sum(OUTFLOWS), sum(INFLOWS) )
-        error_u = sum(OUTFLOWS) - sum(INFLOWS)
-        conserve_u = cvxpy.leq( cvxpy.abs( error_u ), DELTA )
-        
-        CONSTRAINTS.append( conserve_u )
-        
-    # the cost-form constraints
-    for road in cost :
-        for f, line in objectives[road].iter_items() :
-            # is this plus or minus alpha?
-            LB = cvxpy.geq( cost[road], line.offset + line.slope * assist[road] )
-            CONSTRAINTS.append( LB )
-    
-    prog = cvxpy.program( OBJECTIVE, CONSTRAINTS )
-    return prog, assist
-
-
-
-
-""" this one is going to write a Mathprog file instead of a cvxpy program """
-def ASSIST2( roadnet, surplus, objectives ) :
-    prog, map = PROGRAM2( roadnet, surplus, objectives )
-    
-    # prepare file space
-    data = tempfile.NamedTemporaryFile()
-    output = tempfile.NamedTemporaryFile( delete=False )
-    output_name = output.name
-    output.file.close()
-    
-    # write data file
-    data.file.write( prog )
-    data.file.flush()
-    
-    # prepare command
-    cmd = [ 'glpsol', '--math', '--interior' ]
-    cmd.extend([ '-m', package_local('pl_nxopt.model') ])
-    cmd.extend([ '-d', data.name ])
-    cmd.extend([ '-y', output_name ])
-    subp.call( cmd )
-    
-    data.file.close()
-    
-    output = open( output_name, 'r' )
-    ans = output.readlines()
-    output.close()
-    
-    os.remove( output_name )
-    
-    assist = dict()
-    for line in ans :
-        road, z = line.split()
-        assist[ map[ int(road) ] ] = int(z)
-        
-    print assist
-    return assist
-    
-    
-def PROGRAM2( roadnet, surplus, objectives ) :
-    """ write a Mathprog data file """
-    data_str = "data;\n\n"
-    assist = dict()
-    
-    VERTS = dict()
-    for k, u in enumerate( roadnet.nodes_iter() ) :
-        VERTS[u] = k
-    
-    ROADS = dict()
-    TOPOLOGY = []
-    for k, e in enumerate( roadnet.edges_iter( keys=True ) ) :
-        u, v, road = e
-        ROADS[road] = k
-        assist[k] = road
-        
-        tup = ( k, VERTS[u], VERTS[v] )
-        TOPOLOGY.append( tup )
-        
-    data_str += "set VERTS := "
-    for k in VERTS.values() : data_str += "%d " % k
-    data_str += ";\n\n"
-    
-    data_str += "set ROADS := "
-    for k in ROADS.values() : data_str += "%d " % k
-    data_str += ";\n\n"
-    
-    data_str += "set TOPOLOGY := "
-    for tup in TOPOLOGY :
-        data_str += "(%d,%d,%d) " % tup
-    data_str += ";\n\n"
-    
-    data_str += "param b := "
-    for road, b in surplus.iteritems() :
-        data_str += "%d %d  " % ( ROADS[road], b )
-    data_str += ";\n\n"
-    
-    LINES = []
-    ROWS = []
-    slope = dict()
-    offset = dict()
-    
-    line_iter = itertools.count()
-    for road, line_data in objectives.iteritems() :
-        for f, line in line_data.iter_items() :
-            k = line_iter.next()
-            LINES.append( k )
-            row = ( k, ROADS[road] )
-            ROWS.append( row )
-            
-            slope[k] = line.slope
-            offset[k] = line.offset
-            
-    data_str += "set LINES := "
-    for k in LINES : data_str += "%d " % k
-    data_str += ";\n\n"
-    
-    data_str += "set ROWS := "
-    for row in ROWS : data_str += "(%d,%d) " % row
-    data_str += ";\n\n"
-    
-    data_str += "param slope := "
-    for item in slope.iteritems() :
-        data_str += "%d %f  " % item
-    data_str += ";\n\n"
-    
-    data_str += "param offset := "
-    for item in offset.iteritems() :
-        data_str += "%d %f  " % item
-    data_str += ";\n\n"
-    
-    data_str += "end;\n"
-    
-    return data_str, assist
-
-
-
 
 
 
@@ -458,17 +296,25 @@ def ROADMATCHCOST( match, P, Q, roadnet ) :
 
 
 
-def evalC( z, Ctree ) :
-    """ this is the O(log n) query function """
-    _, ( kappa, alpha ) = Ctree.floor_item( -z )
-    return kappa + alpha * z
+
+class costWrapper :
+    def __init__(self, lines ) :
+        self.lines = lines
+        
+    def __call__(self, z ) :
+        """ this is an O(log n) query function, can be reduced to O(1) by random access with saturation """
+        _, line = self.lines.floor_item( -z )
+        return kappa + alpha * z
+
+
 
 def drawCBounds( ZZ, Ctree, ax=None ) :
     if ax is None :
         plt.figure()
         ax = plt.gca()
         
-    Cref = np.array([ evalC( z, Ctree ) for z in ZZ ]) 
+    cost = costWrapper( Ctree )
+    Cref = np.array([ cost( z ) for z in ZZ ]) 
     ax.plot( ZZ, Cref, c='b', linewidth=3, alpha=.25 )
     for f, (kappa, alpha) in Ctree.iter_items() :
         C = kappa + alpha * ZZ
@@ -530,7 +376,9 @@ class UniformDist :
 
 
 if __name__ == '__main__' :
-    
+    import matplotlib.pyplot as plt
+    plt.close('all')
+
     roadnet = nx.MultiDiGraph()
     roadnet.add_edge( 0,1, 'N', length=1. )
     roadnet.add_edge( 1,2, 'E', length=1. )
@@ -592,7 +440,6 @@ if __name__ == '__main__' :
         #
         for road, C in CTREES.iteritems() :
             ax = drawCBounds( ZZ, CTREES[road] )
-            #Cz = np.array([ evalC( z, C ) for z in ZZ ])
             #plt.plot( ZZ, Cz, linestyle='--' )
             
             width = get_road_data( road, roadnet ).get( 'length', 1 )
@@ -600,20 +447,14 @@ if __name__ == '__main__' :
             plt.scatter( ZZZ, Cmatch, marker='x' )
             
             
-            
-            
-            
-
-
-    
-                
     if False :
             # validate C's of the different roads
             for road in CTREES :
                 ax = drawCBounds( ZZ, CTREES[road] )
                 ax.set_title('road=%s' % road )
                 zr = assist[road].value
-                Cr = evalC( zr, CTREES[road] )
+                cost = costWrapper( CTREES[road] )
+                Cr = cost( zr )
                 #ax.axvline( assist[road].value )
                 ax.scatter( [ zr ], [ Cr ], marker='o' )
                 ax.scatter( [ zr ], [ cost[road].value ], marker='x' )

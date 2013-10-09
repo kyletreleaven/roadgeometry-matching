@@ -1,5 +1,7 @@
 
 import math
+import itertools
+
 import numpy as np
 
 from mygraph import mygraph
@@ -7,6 +9,11 @@ from dijkstra import Dijkstra
 from toposort import toposort
 
 
+class line :
+    def __init__(self, slope ) :
+        self.m = slope
+    def __call__(self, x ) :
+        return self.m * x
 
 
 """ Utility Algorithms """
@@ -329,7 +336,6 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
 
 
 if __name__ == '__main__' :
-    import itertools
     import networkx as nx
     
     """
@@ -382,12 +388,6 @@ if __name__ == '__main__' :
         supply = s
     
     cf = {}
-    class line :
-        def __init__(self, slope ) :
-            self.m = slope
-        def __call__(self, x ) :
-            return self.m * x
-        
     for e in c :
         cf[e] = line( c[e] )
     
