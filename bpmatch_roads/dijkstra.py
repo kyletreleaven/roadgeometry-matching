@@ -7,7 +7,7 @@ from priodict import *
 
 def Dijkstra( graph, cost, s ) :
     d = { s : 0. }      # only in here if they are seen... duh!!
-    pred = { s : None }
+    upstream = { s : None }
     
     OPEN = priorityDictionary()
     OPEN[s] = 0.
@@ -19,12 +19,12 @@ def Dijkstra( graph, cost, s ) :
         
         for e in graph.V[i] :
             _, j = graph.endpoints(e)
-            dj = d[i] + cost.get( e, 0. )
+            dj = d[i] + cost.get( e, 0. )   # should this be zero or some default like 1.?
             if j not in d and dj < OPEN.get(j, np.Inf ) :
                 OPEN[j] = dj
-                pred[j] = i
+                upstream[j] = e
                 
-    return d, pred
+    return d, upstream
                 
 
 
