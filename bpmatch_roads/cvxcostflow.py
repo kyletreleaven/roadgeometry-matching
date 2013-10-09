@@ -136,7 +136,7 @@ def UpdatePotential( potential, upstream, graph, cost ) :
 
 """ Convex Cost Flow Algorithm """
     
-def MinCostConvexFlow( network, capacity, supply, cost, epsilon=None ) :
+def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     """
     see "Fragile" version;
     this wrapper adds robustness:
@@ -391,7 +391,7 @@ if __name__ == '__main__' :
     for e in c :
         cf[e] = line( c[e] )
     
-    flow = MinCostConvexFlow( g, u, supply, cf, epsilon=.001 )
+    flow = MinConvexCostFlow( g, u, supply, cf, epsilon=.001 )
     
     digraph = mincostflow_nx( g, u, supply, c )
     compare = nx.min_cost_flow( digraph )
