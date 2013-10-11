@@ -14,6 +14,12 @@ class costWrapper :
         _, line = self.lines.floor_item( -z )
         return line( z )
 
+class negativeWrapper :
+    def __init__(self, func ) :
+        self.func = func
+        
+    def __call__(self, z ) :
+        return self.func( -z )
 
 
 
@@ -25,15 +31,23 @@ def SOLVER( roadnet, surplus, objectives ) :
     cost = {}   # functions
     
     for i,j, road in roadnet.edges_iter( keys=True ) :
-        network.add_edge( road, i, j )
-        
-        # construct cost function for the road
-        cost[road] = costWrapper( objectives[road] )
-        
         supply[j] += surplus[road]
         
-    flow = MinConvexCostFlow( network, {}, supply, cost )
-    for e in flow : flow[e] = int( flow[e] )
+        cc = costWrapper( objectives[road] )
+        ncc = negativeWrapper( cc )     # don't really have to worry about the C(0) offset
+        
+        network.add_edge( (road,+1), i, j )
+        cost[ (road,+1) ] = cc
+        
+        network.add_edge( (road,-1), j, i )
+        cost[ (road,-1) ] = ncc
+    
+    f = MinConvexCostFlow( network, {}, supply, cost )
+    
+    flow = {}
+    for i, j, road in roadnet.edges_iter( keys=True ) :
+        flow[road] = f[(road,+1)] - f[(road,-1)]
+        flow[road] = int( flow[road] )
     
     #print flow
     return flow
