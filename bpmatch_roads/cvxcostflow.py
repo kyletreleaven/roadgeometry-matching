@@ -168,6 +168,13 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
     redcost = {}
     
     """ ALGORITHM """
+    # need to START optimal, so... we probably need to set appropriate potentials at the beginning
+    # ...I think most treatments fail to consider negative initial slope, which
+    # is totally possible
+	#
+	# other way around, start with potentials zero, and set flow to be unconstrained minimum on each edge
+	#
+	# also, need to allow negative flow on roads (probably by bi-edges)
     flow = { e : 0. for e in network.edges() }
     potential = { i : 0. for i in network.nodes() }
     #ResidualGraph( rgraph, flow, capacity, Delta, network )   # compute residual capacities
@@ -206,8 +213,10 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
         CERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < 0. }
         print 'certificate, end stage ONE: %s' % repr( CERT )
         if len( CERT ) > 0 : print "STAGE ONE CERTIFICATE CORRUPT!"
+        # am considering removing this assertion, but leaving the stage two one
+        # could be running into problems where the functional form is defined beyond saturation bounds
         assert len( CERT ) <= 0
-                
+        
                 
         """ Stage 2. """
         # while there are imbalanced nodes
@@ -327,8 +336,10 @@ if __name__ == '__main__' :
         supply = s
     
     cf = {}
-    for e in c :
-        cf[e] = line( c[e] )
+    #for e in c : cf[e] = line( c[e] )
+    cf['a'] = lambda x : 1.5 * x
+    cf['b'] = lambda x : np.power( x, 2.0 )
+    cf['c'] = lambda x : 2. * np.exp( .5 * ( 1. - x ) )
     
     flow = MinConvexCostFlow( g, u, supply, cf, epsilon=.001 )
     
