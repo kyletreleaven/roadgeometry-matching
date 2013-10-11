@@ -95,7 +95,7 @@ def Excess( flow, graph, supply ) :
             
 
 """ Convex Cost Flow Algorithm """
-    
+
 def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     """
     see "Fragile" version;
@@ -142,7 +142,7 @@ def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     
     
     
-def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
+def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
     """
     network is a mygraph (above)
     capacity is a dictionary from E -> real capacities
@@ -152,7 +152,6 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
     1. Assumes supply is conservative (sum to zero).
     2. Assumes every Delta-residual graph is strongly connected,
     i.e., there exists a path with inf capacity b/w any two nodes;
-    3. Assumes that zero potential is initially optimal, i.e., non-negative slope at zero flow!
     """
     if epsilon is None : epsilon = 1
     
@@ -162,21 +161,25 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
     redcost = {}
     
     """ ALGORITHM """
-    potential = { i : 0. for i in network.nodes() }
-    # needs to START optimal:
-    # ...most treatments fail to consider negative initial slope, which
-    # is totally possible... 
-    #
-    # TODO: can be handled by setting initial flow at unconstrained minimizer on each edge!
-    flow = { e : 0. for e in network.edges() }
-    
     U = sum([ b for b in supply.values() if b > 0. ])
+    print 'total supply: %f' % U
+    
+    # trimming infinite capacities to U allows negative initial slopes 
+    # the initial flow may not be Delta-optimality at the beginning of Stage One,
+    # but achieves Delta-optimality by the end, by saturating any negative cost edges.
+    # most treatments fail to consider negative initial slope, which is totally possible... 
+    capacity = {}
+    for e in network.edges() :
+        capacity[e] = min( U, capacity_in.get( e, np.Inf ) )
+        
+        
     temp = math.floor( math.log(U,2) )
     Delta = 2.**temp
-    
-    print 'total supply: %f' % U
     print 'Delta: %d' % Delta
     
+    
+    flow = { e : 0. for e in network.edges() }
+    potential = { i : 0. for i in network.nodes() }
     
     while Delta >= epsilon :
         print '\nnew phase: Delta=%f' % Delta
@@ -338,7 +341,8 @@ if __name__ == '__main__' :
     #for e in c : cf[e] = line( c[e] )
     cf['a'] = lambda x : 5.5 * x + 100.
     cf['b'] = lambda x : np.power( x, 2.0 )
-    cf['c'] = lambda x : 2. * np.exp( .5 * ( x - 1. ) )
+    #cf['c'] = lambda x : 2. * np.exp( .5 * ( x - 1. ) )
+    cf['c'] = lambda x : 2. * np.exp( .5 * ( 1. - x ) )
     
     def show( func ) :
         x = np.linspace(0,10,1000)
