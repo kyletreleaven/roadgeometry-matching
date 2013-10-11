@@ -222,7 +222,7 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
             TT = [ i for i,ex in excess.iteritems() if ex <= -Delta ]
             print 'surplus nodes: %s' % repr( SS )
             print 'deficit nodes: %s' % repr( TT )
-            if len( SS ) <= 0 : break
+            if len( SS ) <= 0 or len( TT ) <= 0 : break
             
             s = SS[0] ; t = TT[0]
             print 'shall augment %s to %s' % ( repr(s), repr(t) )
