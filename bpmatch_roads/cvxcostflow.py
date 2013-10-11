@@ -149,18 +149,12 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
     supply is a dictionary from E -> real supplies
     cost is a dictionary from E -> lambda functions of convex cost edge costs
     
-    assumes every Delta-residual graph is strongly connected,
+    1. Assumes supply is conservative (sum to zero).
+    2. Assumes every Delta-residual graph is strongly connected,
     i.e., there exists a path with inf capacity b/w any two nodes;
+    3. Assumes that zero potential is initially optimal, i.e., non-negative slope at zero flow!
     """
     if epsilon is None : epsilon = 1
-    
-    U = sum([ b for b in supply.values() if b > 0. ])
-    #U = sum([ abs(b) for b in supply.values() ])
-    temp = math.floor( math.log(U,2) )
-    Delta = 2.**temp
-    
-    print 'total supply: %f' % U
-    print 'Delta: %d' % Delta
     
     # initialize algorithm data
     rgraph = mygraph()
@@ -168,24 +162,27 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
     redcost = {}
     
     """ ALGORITHM """
-    # need to START optimal, so... we probably need to set appropriate potentials at the beginning
-    # ...I think most treatments fail to consider negative initial slope, which
-    # is totally possible
-	#
-	# other way around:
-    # start with potentials zero, and set initial flow at unconstrained minimizer on each edge
-	#
-	# also, need to support double-sided flow on roads (that, probably by bi-edges)
-    #
-    flow = { e : 0. for e in network.edges() }
     potential = { i : 0. for i in network.nodes() }
+    # needs to START optimal:
+    # ...most treatments fail to consider negative initial slope, which
+    # is totally possible... 
+    #
+    # TODO: can be handled by setting initial flow at unconstrained minimizer on each edge!
+    flow = { e : 0. for e in network.edges() }
+    
+    U = sum([ b for b in supply.values() if b > 0. ])
+    temp = math.floor( math.log(U,2) )
+    Delta = 2.**temp
+    
+    print 'total supply: %f' % U
+    print 'Delta: %d' % Delta
+    
     
     while Delta >= epsilon :
         print '\nnew phase: Delta=%f' % Delta
         
         # Delta is fresh, so we need to [re-] linearize the costs and compute residual graph 
         LinearizeCost( lincost, cost, flow, Delta, network )
-        #print 'local costs, phase init: %s' % repr( lincost )
         ReducedCost( redcost, lincost, potential, network )
         ResidualGraph( rgraph, flow, capacity, Delta, network )
         #
@@ -223,7 +220,6 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
         # while there are imbalanced nodes
         while True :
             print 'flow: %s' % repr( flow )
-            print 'potentials: %s' % repr( potential )
             
             excess = Excess( flow, network, supply )        # last function that needs to be increment-ized
             print 'excess: %s' % repr(excess)
@@ -237,6 +233,7 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
             s = SS[0] ; t = TT[0]
             print 'shall augment %s to %s' % ( repr(s), repr(t) )
             
+            print 'potentials: %s' % repr( potential )
             cert = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() }
             print 'reduced costs on res. graph, for shortest paths: %s' % repr( cert )
             
@@ -323,7 +320,7 @@ if __name__ == '__main__' :
         
         g.add_edge( 'a', 0, 1 )
         c['a'] = 1.
-        u['a'] = 1.35
+        #u['a'] = 1.35
         
         #g.add_edge( 'aprime', 0, 1 )
         #c['aprime'] = 1000.
@@ -339,7 +336,7 @@ if __name__ == '__main__' :
     
     cf = {}
     #for e in c : cf[e] = line( c[e] )
-    cf['a'] = lambda x : 1.5 * x + 100.
+    cf['a'] = lambda x : 5.5 * x + 100.
     cf['b'] = lambda x : np.power( x, 2.0 )
     cf['c'] = lambda x : 2. * np.exp( .5 * ( x - 1. ) )
     
@@ -352,11 +349,21 @@ if __name__ == '__main__' :
     
     
     def FLOWCOST( flow, cost ) :
-        res = [ cost.get( e, line(0.) )( flow[e] ) for e in flow ]
+        res = [ cc( flow.get( e, 0. ) ) for e, cc in cost.iteritems() ]    # big difference!
+        #res = [ cost.get( e, line(0.) )( flow[e] ) for e in flow ]
         return sum( res )
     
+    def FEAS( flow, capacity, network ) :
+        for e in network.edges() :
+            if flow.get(e, 0. ) > capacity.get(e, np.Inf ) : return False
+        return True
     
     flow = MinConvexCostFlow( g, u, supply, cf, epsilon=.001 )
+    print ( flow, FLOWCOST( flow, cf ), FEAS( flow, u, g ) )
+    
+    flowstar = { 'b' : 10., 'd' : 10. }
+    print ( flowstar, FLOWCOST( flowstar, cf ), FEAS( flowstar, u, g ) )
+    
     
     digraph = mincostflow_nx( g, u, supply, c )
     compare = nx.min_cost_flow( digraph )
