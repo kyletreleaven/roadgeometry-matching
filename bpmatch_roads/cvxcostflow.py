@@ -57,7 +57,7 @@ def LinearizeCost( lincost, cost, flow, Delta, network, edge=None ) :
         x = flow.get(e, 0. )
         cc = cost.get( e, line(0.) )
         for dir in [ +1, -1 ] :
-            lincost[(e,dir)] = ( cc( x + dir * Delta ) - cc(x) ) / Delta
+            lincost[(e,dir)] = float( cc( x + dir * Delta ) - cc(x) ) / Delta
             
             
 def ReducedCost( rcost, lincost, potential, network, edge=None ) :
@@ -119,7 +119,7 @@ def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
         if e in capacity : capacity_rename[ newedge ] = capacity[e]
         if e in cost : cost_aug[ newedge ] = cost[e]
         
-    # add a doubly-linked chain, with prohibitive cost
+    # add a directed cycles, with prohibitive cost
     U = sum([ b for b in supply.values() if b > 0. ])
     # since costs are convex, flow cannot have cost greater than M
     M = sum([ c(U) for c in cost.values() ])
@@ -127,14 +127,10 @@ def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     
     NODES = network.nodes()
     edgegen = itertools.count()
-    for i,j in zip( NODES[:-1], NODES[1:] ) :
+    for i,j in zip( NODES, NODES[1:] + NODES[:1] ) :
         frwd = (AUGMENTING, edgegen.next() )
         network_aug.add_edge( frwd, i, j )
         cost_aug[frwd] = prohibit
-        
-        bkwd = (AUGMENTING, edgegen.next() )
-        network_aug.add_edge( bkwd, j, i )
-        cost_aug[bkwd] = prohibit
     
     # run the "fragile" version
     flow = FragileMCCF( network_aug, capacity_rename, supply, cost_aug, epsilon )
@@ -179,11 +175,9 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
     while Delta >= epsilon :
         print '\nnew phase: Delta=%f' % Delta
         
-        # Delta is fresh, so we need to [re-] linearize the costs
-        # also will need to update relevant edge, after every augmentation
+        # Delta is fresh, so we need to [re-] linearize the costs and compute residual graph 
         LinearizeCost( lincost, cost, flow, Delta, network )    # all edges
         print 'local costs, phase init: %s' % repr( lincost )
-        
         ReducedCost( redcost, lincost, potential, network )  # only need reduced costs on the residual graph
         ResidualGraph( rgraph, flow, capacity, Delta, network )
         #
@@ -212,6 +206,7 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
         CERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < 0. }
         print 'certificate, end stage ONE: %s' % repr( CERT )
         if len( CERT ) > 0 : print "STAGE ONE CERTIFICATE CORRUPT!"
+        assert len( CERT ) <= 0
                 
                 
         """ Stage 2. """
@@ -232,8 +227,8 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
             s = SS[0] ; t = TT[0]
             print 'shall augment %s to %s' % ( repr(s), repr(t) )
             
-            cert = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() }
-            print 'reduced costs on res. graph, for shortest paths: %s' % repr( cert )
+            #cert = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() }
+            #print 'reduced costs on res. graph, for shortest paths: %s' % repr( cert )
             
             dist, upstream = Dijkstra( rgraph, redcost, s )
             print 'Dijkstra shortest path distances: %s' % repr( dist )
@@ -248,6 +243,11 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
                 j = i
             print 'using path: %s' % repr( PATH )
             
+            # update the potentials and reduced costs; by connectivity, should touch *every* node
+            for i in rgraph.nodes() : potential[i] -= dist[i]
+            #redcost = ReducedCost( lincost, potential, Delta_rgraph )
+            #print 'new reduced costs: %s' % repr( redcost )
+            
             # augment Delta flow along the path P
             for edge in PATH :
                 e,dir = edge
@@ -257,17 +257,11 @@ def FragileMCCF( network, capacity, supply, cost, epsilon=None ) :
                 ReducedCost( redcost, lincost, potential, network, edge=e )  # only need reduced costs on the residual graph
                 ResidualGraph( rgraph, flow, capacity, Delta, network, edge=e )
             
-            # update the potentials and reduced costs; by connectivity, should touch *every* node
-            for i in rgraph.nodes() : potential[i] -= dist[i]
-            #redcost = ReducedCost( lincost, potential, Delta_rgraph )
-            #print 'new reduced costs: %s' % repr( redcost )
-            
-            
         # at end of each stage, verify the optimality certificate (should be empty every time)
         CERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < 0. }
         print 'certificate, end stage TWO: %s' % repr( CERT )
         if len( CERT ) > 0 : print "STAGE TWO CERTIFICATE CORRUPT!"
-                    
+        assert len( CERT ) <= 0
                     
         # end the phase
         if Delta <= epsilon : break
