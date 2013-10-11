@@ -159,6 +159,7 @@ def SURPLUS( segment ) :
 
 
 def MEASURE( segment, length ) :
+    # bintree instead of dict so that it is enumerated in sorted order
     measure = bintrees.RBTree()
     
     posts = [ 0. ] + [ y for y,q in segment.iter_items() ] + [ length ]
@@ -392,13 +393,13 @@ if __name__ == '__main__' :
     PP = [ sampler.sample() for i in xrange(NUMPOINT) ]
     QQ = [ sampler.sample() for i in xrange(NUMPOINT) ]
     
-    z = np.linspace(-NUMPOINT,NUMPOINT,1000)
+    z = np.arange(-NUMPOINT,NUMPOINT,.25)
     objective_dict = WRITEOBJECTIVES( PP, QQ, roadnet )
     for road, Cz in objective_dict.iteritems() :
         cost = costWrapper( Cz )
         C = [ cost(zz) for zz in z ]
         plt.figure()
-        plt.plot( z, C )
+        plt.plot( z, C, '--', marker='x' )
         
         
     
