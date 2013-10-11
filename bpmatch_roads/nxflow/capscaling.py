@@ -33,8 +33,10 @@ def SOLVER( roadnet, surplus, objectives ) :
         supply[j] += surplus[road]
         
     flow = MinConvexCostFlow( network, {}, supply, cost )
+    for e in flow : flow[e] = int( flow[e] )
+    
+    #print flow
     return flow
-
 
 
 
