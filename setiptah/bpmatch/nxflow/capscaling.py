@@ -1,8 +1,8 @@
 
 #from bpmatch_roads.bm_roadnet import costWrapper
 
-from bpmatch_roads.mygraph import mygraph
-from bpmatch_roads.cvxcostflow import MinConvexCostFlow
+from setiptah.mygraph import mygraph
+from setiptah.nxopt.cvxcostflow import MinConvexCostFlow
 
 
 class costWrapper :

@@ -8,10 +8,11 @@ import bintrees
 import networkx as nx
 
 """ my dependencies """
-import roadmap_basic as ROAD
-import astar_basic as ASTAR
+import setiptah.roadmap_basic as ROAD
+import setiptah.astar_basic as ASTAR
 
-from bpmatch_roads.nxflow.capscaling import SOLVER
+from nxflow.capscaling import SOLVER
+
 
 # to construct the optimization problem
 
