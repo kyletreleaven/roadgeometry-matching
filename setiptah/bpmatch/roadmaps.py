@@ -8,8 +8,8 @@ import bintrees
 import networkx as nx
 
 """ my dependencies """
-import setiptah.roadmap_basic as ROAD
-import setiptah.astar_basic as ASTAR
+import setiptah.roadgeometry.roadmap_basic as ROAD
+import setiptah.roadgeometry.astar_basic as ASTAR
 
 from nxflow.capscaling import SOLVER
 
