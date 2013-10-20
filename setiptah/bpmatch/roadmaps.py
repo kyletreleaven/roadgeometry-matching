@@ -382,11 +382,12 @@ class UniformDist :
         for _,__, road, data in roadnet.edges_iter( keys=True, data=True ) :
             weight_dict[road] = data.get( length, 1 )
             
+        self.roadnet = roadnet
         self.road_sampler = WeightedSet( weight_dict )
         
     def sample(self) :
         road = self.road_sampler.sample()
-        L = get_road_data( road, roadnet ).get( 'length', 1 )
+        L = get_road_data( road, self.roadnet ).get( 'length', 1 )
         y = L * np.random.rand()
         return (road,y)
     
