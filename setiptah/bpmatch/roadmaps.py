@@ -175,6 +175,23 @@ def MEASURE( segment, length ) :
         
     return measure
 
+
+def INTERVALS( segment ) :      # very similar routine, used to build the walk graph
+    res = dict()
+    
+    posts = [ '-' ] + [ y for y,q in segment.iter_items() ] + [ '+' ]
+    intervals = zip( posts[:-1], posts[1:] )
+    
+    deltas = [0] + [ len(q.P)-len(q.Q) for y,q in segment.iter_items() ]
+    F = np.cumsum( deltas )
+    
+    for I, f in zip( intervals, F ) :
+        res.setdefault( f, [] )
+        res[f].append( I )
+        
+    return res
+
+
 def EDGES( segment ) :      # very similar routine, used to build the walk graph
     edges = dict()
     
