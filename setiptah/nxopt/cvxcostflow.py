@@ -96,6 +96,10 @@ def Excess( flow, graph, supply ) :
 
 """ Convex Cost Flow Algorithm """
 
+class ALGGLOBAL :
+    REGULAR = ':'
+    AUGMENTING = 'AUG'
+
 def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     """
     see "Fragile" version;
@@ -103,17 +107,26 @@ def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     pre-processes to ensure strong connectivity of *any* Delta-residual graph;
     edge weights should be prohibitively expensive
     """
-    # pre-process
-    REGULAR = ':'
-    AUGMENTING = 'AUG'
     
+    # create a robust instance
+    network_aug, capacity_rename, cost_aug = MCCFRobustInstance( network, capacity, supply, cost )
+    
+    # run the "fragile" version
+    flow = FragileMCCF( network_aug, capacity_rename, supply, cost_aug, epsilon )
+    
+    # prepare output --- perhaps do some feasibility checking in the future
+    res = { e : x for (type,e), x in flow.iteritems() if type == ALGGLOBAL.REGULAR }
+    return res
+
+
+def MCCFRobustInstance( network, capacity, supply, cost ) :
     network_aug = mygraph()
     capacity_rename = {}
     cost_aug = {}
     
     for e in network.edges() :
         i,j = network.endpoints(e)
-        newedge = (REGULAR,e)
+        newedge = (ALGGLOBAL.REGULAR,e)
         
         network_aug.add_edge( newedge, i, j )
         if e in capacity : capacity_rename[ newedge ] = capacity[e]
@@ -128,20 +141,15 @@ def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     NODES = network.nodes()
     edgegen = itertools.count()
     for i,j in zip( NODES, NODES[1:] + NODES[:1] ) :
-        frwd = (AUGMENTING, edgegen.next() )
+        frwd = (ALGGLOBAL.AUGMENTING, edgegen.next() )
         network_aug.add_edge( frwd, i, j )
         cost_aug[frwd] = prohibit
-    
-    # run the "fragile" version
-    flow = FragileMCCF( network_aug, capacity_rename, supply, cost_aug, epsilon )
-    
-    # prepare output --- perhaps do some feasibility checking in the future
-    res = { e : x for (type,e), x in flow.iteritems() if type == REGULAR }
-    return res
-    #
+        
+    return network_aug, capacity_rename, cost_aug
     
     
     
+
 def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
     """
     network is a mygraph (above)
