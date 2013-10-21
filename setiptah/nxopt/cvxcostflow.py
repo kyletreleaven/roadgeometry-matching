@@ -213,10 +213,15 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
         # at end of each stage, verify the optimality certificate (should be empty every time)
         CERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < 0. }
         print 'certificate, end stage ONE: %s' % repr( CERT )
-        if len( CERT ) > 0 : print "STAGE ONE CERTIFICATE CORRUPT!"
+        #if len( CERT ) > 0 : print "STAGE ONE CERTIFICATE CORRUPT!"
         # am considering removing this assertion, but leaving the stage two one
         # could be running into problems where the functional form is defined beyond saturation bounds
-        assert len( CERT ) <= 0
+        RELAXCERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < -10**-10 }
+        if len( RELAXCERT ) > 0 : 
+            print RELAXCERT
+            print "STAGE ONE CERTIFICATE CORRUPT!"
+        print RELAXCERT
+        assert len( RELAXCERT ) <= 0
         
                 
         """ Stage 2. """
@@ -271,7 +276,9 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
         CERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < 0. }
         print 'certificate, end stage TWO: %s' % repr( CERT )
         RELAXCERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < -10**-10 }
-        if len( RELAXCERT ) > 0 : print "STAGE TWO CERTIFICATE CORRUPT!"
+        if len( RELAXCERT ) > 0 :
+            print RELAXCERT
+            print "STAGE TWO CERTIFICATE CORRUPT!"
         assert len( RELAXCERT ) <= 0
                     
         # end the phase
