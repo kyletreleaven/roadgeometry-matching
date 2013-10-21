@@ -76,21 +76,19 @@ def ReducedCost( rcost, lincost, potential, network, edge=None ) :
             
             
             
-# TODO: Incrementize
-def Excess( flow, graph, supply ) :
-    excess = {}
-    for i in graph.nodes() :
+def Excess( excess, flow, graph, supply, edge=None ) :
+    if edge is None :
+        iter = graph.nodes()
+    else :
+        iter = graph.endpoints( edge )
+        
+    for i in iter :
         excess[i] = supply.get(i, 0. )
         
         for e in graph.W[i] :   # edges in
             excess[i] += flow.get(e, 0. )
         for e in graph.V[i] :
             excess[i] -= flow.get(e, 0. )
-            
-    return excess
-
-
-
             
             
 
@@ -167,6 +165,7 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
     rgraph = mygraph()
     lincost = {}
     redcost = {}
+    excess = {}
     
     """ ALGORITHM """
     U = sum([ b for b in supply.values() if b > 0. ])
@@ -187,8 +186,10 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
     
     
     flow = { e : 0. for e in network.edges() }
-    potential = { i : 0. for i in network.nodes() }
+    Excess( excess, flow, network, supply )
     
+    potential = { i : 0. for i in network.nodes() }
+        
     while Delta >= epsilon :
         print '\nnew phase: Delta=%f' % Delta
         
@@ -212,6 +213,7 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
                 
                 # no augment, just saturate!
                 flow[e] += dir * Delta
+                Excess( excess, flow, network, supply, edge=e )
                 #print 'flow correction: %s' % repr( flow )
                 
                 LinearizeCost( lincost, cost, flow, Delta, network, edge=e )
@@ -236,9 +238,8 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
         # while there are imbalanced nodes
         while True :
             print 'flow: %s' % repr( flow )
-            
-            excess = Excess( flow, network, supply )        # last function that needs to be increment-ized
-            print 'excess: %s' % repr(excess)
+            #excess = Excess( flow, network, supply )        # last function that needs to be increment-ized
+            #print 'excess: %s' % repr(excess)
             
             SS = [ i for i,ex in excess.iteritems() if ex >= Delta ]
             TT = [ i for i,ex in excess.iteritems() if ex <= -Delta ]
@@ -249,26 +250,40 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
             s = SS[0] ; t = TT[0]
             print 'shall augment %s to %s' % ( repr(s), repr(t) )
             
-            print 'potentials: %s' % repr( potential )
+            #print 'potentials: %s' % repr( potential )
             cert = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() }
-            print 'reduced costs on res. graph, for shortest paths: %s' % repr( cert )
+            #print 'reduced costs on res. graph, for shortest paths: %s' % repr( cert )
             
             dist, upstream = Dijkstra( rgraph, redcost, s )
-            print 'Dijkstra shortest path distances: %s' % repr( dist )
-            print 'Dijkstra upstreams: %s' % repr( upstream )
+            #print 'Dijkstra shortest path distances: %s' % repr( dist )
+            #print 'Dijkstra upstreams: %s' % repr( upstream )
             
             # find shortest path w.r.t. reduced costs (just follow ancestry links to the root)
-            PATH = [] ; j = t
-            while j is not s :
-                e = upstream[j]
-                i,_ = rgraph.endpoints(e)
-                PATH.insert( 0, e )
-                j = i
+            try :
+                PATH = [] ; j = t
+                while j is not s :
+                    e = upstream[j]
+                    i,_ = rgraph.endpoints(e)
+                    PATH.insert( 0, e )
+                    j = i
+                    
+            except Exception as e :
+                e.rgraph = rgraph
+                e.redcost = redcost
+                e.s = s
+                
+                e.path_so_far = PATH
+                e.j = j
+                
+                raise e
+                    
             print 'using path: %s' % repr( PATH )
             
             # augment Delta flow along the path P
             for e,dir in PATH :
                 flow[e] += dir * Delta
+                Excess( excess, flow, network, supply, edge=e )
+                
                 LinearizeCost( lincost, cost, flow, Delta, network, edge=e )    # all edges
                 ResidualGraph( rgraph, flow, capacity, Delta, network, edge=e )
                 
