@@ -261,7 +261,7 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
             # find shortest path w.r.t. reduced costs (just follow ancestry links to the root)
             try :
                 PATH = [] ; j = t
-                while j is not s :
+                while j != s :      # previously was "is"... that created problems non-deterministically
                     e = upstream[j]
                     i,_ = rgraph.endpoints(e)
                     PATH.insert( 0, e )
