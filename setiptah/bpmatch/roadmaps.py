@@ -142,6 +142,20 @@ def SEGMENTS( P, Q, roadnet ) :
     return segments
     
     
+
+def ONESEGMENT( S, T ) :
+    roadnet = nx.MultiDiGraph()
+    roadnet.add_edge(0,1, 'line' )
+    
+    SS = ( ('line',s) for s in S )
+    TT = ( ('line',t) for t in T )
+    
+    segments = SEGMENTS( SS, TT, roadnet )
+    return segments['line']
+
+    
+    
+    
 def PREMATCH( segment ) :
     match = []
     for y, q in segment.iter_items() :
