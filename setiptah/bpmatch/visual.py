@@ -16,21 +16,6 @@ import setiptah.bpmatch.roadmaps as roadbm
 
 
 
-def drawHeightFunction( S, T, length ) :
-    roadnet = nx.MultiDiGraph()
-    roadnet.add_edge(0,1,'line', length=length )
-    
-    SS = ( ('line',s) for s in S )
-    TT = ( ('line',t) for t in T )
-    
-    segments = roadbm.SEGMENTS( SS, TT, roadnet )
-    
-    
-    return segments
-
-
-
-
 if __name__ == '__main__' :
     YMIN = -4.
     YMAX = 4.
@@ -46,10 +31,13 @@ if __name__ == '__main__' :
         X = [ -2.5, 2, ]
         O = [ -2., -1., 1., 3. ]
         
-    segment = drawHeightFunction( X, O, YMAX )['line']
+    segment = roadbm.ONESEGMENT( X, O )
     intervals = roadbm.INTERVALS( segment )
     
-    """ to tikz """
+    #segment = drawHeightFunction( X, O, YMIN, YMAX )['line']
+    #intervals = roadbm.INTERVALS( segment )
+    
+    """ H to tikz """
     str = ''
     str += "\\begin{tikzpicture}\n"
     
@@ -74,8 +62,6 @@ if __name__ == '__main__' :
         for Y, mark in phases :
             for i in Y : str += "\\draw (%f,0) node {%s} ;\n" % ( y, mark )
             
-    
-    
     # place the levels
     for f, ranges in intervals.items() :
         for a,b in ranges :
@@ -97,15 +83,104 @@ if __name__ == '__main__' :
             # place the shades
             str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % DATA
             
-    
-
-
-
     str += "\\end{tikzpicture}\n"
     
     f = open( 'Hout.tex', 'w' )
     f.write( str )
     f.close()
+
+
+
+
+
+    
+    
+    """ C to tikz """
+    meas = roadbm.MEASURE( segment, YMIN, YMAX )
+    obj = roadbm.OBJECTIVE( meas )
+    Cf = roadbm.costWrapper( obj )
+    
+    str = ''
+    str += "\\begin{tikzpicture}\n"
+    
+    # draw the axis
+    ZMIN, ZMAX = -max( meas ), -min( meas )
+    C = [ ( Cf(z), z ) for z in range(ZMIN,ZMAX+1) ]
+    CMIN, ZOPT = min(C)
+    CMAX, _ = max(C)
+    
+    # horizontal
+    horz_level = np.floor(CMIN)
+    data = { 'zmin' : ZMIN, 'zmax' : ZMAX, 'horz' : horz_level }
+    fmt = "\\draw [->] (%(zmin)d,%(horz)d) -- (%(zmax)f,%(horz)d) node [right] {$\\coordvar$} ;\n" 
+    str +=  fmt % data
+    # vertical
+    str += "\\draw [->] (0,%(cmin)f-1) -- (0,%(cmax)f) " % { 'cmin' : CMIN, 'cmax' : CMAX }
+    str += "node [above] {$\\cost(\\numarcs)$} ;\n"
+    # horizontal ticks
+    for tick in np.arange(ZMIN,ZMAX+1,1) :
+        data = { 'tick' : tick, 'horz' : horz_level }
+        str += "\\draw (%(tick)d,%(horz)f-.1) -- (%(tick)f,%(horz)f+.1) " % data
+        str += "node [below=5] {$%d$} ;\n" % tick
+        
+    # draw dashed C curve
+    Z = range(ZMIN,ZMAX+1)
+    Z.append( zr )
+    for z1,z2 in zip( Z[:-1], Z[1:] ) :
+        c1 = Cf(z1)
+        c2 = Cf(z2)
+        
+        data = { 'z1' : z1, 'z2' : z2, 'c1' : c1, 'c2' : c2 }
+        str += "\\draw [dashed] (%(z1)f,%(c1)f) -- (%(z2)f,%(c2)f) ;\n" % data
+        
+    # draw C so far
+    zrfloor = int( np.floor(zr) )
+    Z = range(ZMIN, zrfloor+1 )
+    Z.append( zr )
+    for z1,z2 in zip( Z[:-1], Z[1:] ) :
+        c1 = Cf(z1)
+        c2 = Cf(z2)
+        
+        data = { 'z1' : z1, 'z2' : z2, 'c1' : c1, 'c2' : c2 }
+        str += "\\draw [thick] (%(z1)f,%(c1)f) -- (%(z2)f,%(c2)f) ;\n" % data
+    
+    if False :
+
+        # place the X's and O's
+        for y, item in segment.items() :
+            phases = [ (item.P, '$\\times$' ), (item.Q, '$\\circ$') ]
+            for Y, mark in phases :
+                for i in Y : str += "\\draw (%f,0) node {%s} ;\n" % ( y, mark )
+                
+        # place the levels
+        for f, ranges in intervals.items() :
+            for a,b in ranges :
+                label = ''
+                if a == '-' :
+                    a = YMIN
+                    label = "node [%s] {$\\numarcs_\\roadvar$}"
+                    if True :       # zr >= 0?
+                        label = label % "above"
+                    else :
+                        label = label % "below"
+                if b == '+' :
+                    b = YMAX
+                    str += "\\draw (%f,%f) node [right] {$\\numarcs_\\roadvar + \\surplus_\\roadvar$} ;\n" % (b,f)
+                                
+                levelstr = "\\draw [thick] (%(yl)f,%(z)f) -- %(extra)s (%(yr)f,%(z)f) ;\n"
+                DATA = { 'yl' : a, 'yr' : b, 'z' : f, 'extra' : label }
+                str += levelstr % DATA
+                # place the shades
+                str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % DATA
+                
+    str += "\\end{tikzpicture}\n"
+    
+    f = open( 'Cout.tex', 'w' )
+    f.write( str )
+    f.close()
+
+
+
 
 
 
