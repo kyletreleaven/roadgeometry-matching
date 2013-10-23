@@ -11,7 +11,6 @@ import networkx as nx
 import setiptah.roadgeometry.roadmap_basic as ROAD
 import setiptah.roadgeometry.astar_basic as ASTAR
 
-from nxflow.capscaling import SOLVER
 
 
 # to construct the optimization problem
@@ -48,6 +47,7 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
         objective_dict[road] = OBJECTIVE( measure )
         #objective_dict[road] = objective
         
+    from nxflow.capscaling import SOLVER
     assist = SOLVER( roadnet, surplus_dict, objective_dict )
     
     topograph = TOPOGRAPH( segment_dict, assist, roadnet )
