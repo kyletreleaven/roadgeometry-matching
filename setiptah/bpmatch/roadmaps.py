@@ -159,11 +159,17 @@ def SURPLUS( segment ) :
     return sum( deltas )
 
 
-def MEASURE( segment, length ) :
+def MEASURE( segment, length, rbound=None ) :
+    if rbound is not None :
+        lbound = length
+    else :
+        lbound = 0.
+        rbound = length
+        
     # bintree instead of dict so that it is enumerated in sorted order
     measure = bintrees.RBTree()
     
-    posts = [ 0. ] + [ y for y,q in segment.iter_items() ] + [ length ]
+    posts = [ lbound ] + [ y for y,q in segment.iter_items() ] + [ rbound ]
     intervals = zip( posts[:-1], posts[1:] )
     
     deltas = [0] + [ len(q.P)-len(q.Q) for y,q in segment.iter_items() ]
