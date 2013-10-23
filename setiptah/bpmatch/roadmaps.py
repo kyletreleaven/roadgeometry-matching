@@ -29,6 +29,21 @@ def get_road_data( road, roadnet ) :
 
 """ ALGORITHM HIGH LEVEL """
 
+class ROADSBIPARTITE :
+    @classmethod
+    def MATCH(cls, S, T, roadnet ) :
+        pass
+    
+    @classmethod
+    def COST(cls, S, T, roadnet ) :
+        pass
+    
+    @classmethod
+    def STATISTIC(cls, S, T, roadnet ) :
+        pass
+    
+    
+
 def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
     MATCH = []
     
@@ -230,24 +245,26 @@ def EDGES( segment ) :      # very similar routine, used to build the walk graph
 
 
 def OBJECTIVE( measure ) :
+    def sweep( x ) :
+        Xminus = np.cumsum( x )
+        total = Xminus[-1]
+        Xplus = total - Xminus
+        X = Xplus - Xminus
+        return X
+    
     # prepare constants kappa and alpha
-    ff = np.array( [ -np.inf ] + [ f for f in measure ] )
     PREALPHA = np.array( [ 0. ] + [ w for f,w in measure.items() ] )
+    ALPHA = sweep( PREALPHA )
+    
     PREKAPPA = np.array( [ 0. ] + [ f*w for f,w in measure.items() ] )
+    KAPPA = sweep( PREKAPPA )
     
-    ALPHAM = np.cumsum( PREALPHA )
-    ALPHAP = ALPHAM[-1] - ALPHAM
-    ALPHA = ALPHAP - ALPHAM
-    
-    KAPPAM = np.cumsum( PREKAPPA )
-    KAPPAP = KAPPAM[-1] - KAPPAM
-    KAPPA = KAPPAP - KAPPAM
-    
-    Czminus = bintrees.RBTree()
-    for f, kappa, alpha in zip( ff, KAPPA, ALPHA ) :
-        Czminus.insert( f, LineData( alpha, kappa ) )
+    Cz = bintrees.RBTree()
+    ff = [ f for f in measure ] + [ np.inf ]        # should be in order
+    for f, alpha, kappa in zip( ff, ALPHA, KAPPA ) :
+        Cz.insert( -f, LineData( alpha, kappa ) )
         
-    return Czminus
+    return Cz
 
 
 
@@ -341,8 +358,8 @@ class costWrapper :
         self.lines = lines
         
     def __call__(self, z ) :
-        """ this is an O(log n) query function, can be reduced to O(1) by random access with saturation """
-        _, line = self.lines.floor_item( -z )
+        """ this is an O(log n) query function, can be reduced to O(1) by random access after floor operation """
+        _, line = self.lines.floor_item( z )
         return line( z )
 
 
