@@ -14,9 +14,119 @@ import setiptah.roadgeometry.astar_basic as ASTAR
 import setiptah.bpmatch.roadmaps as roadbm
 
 
+def texline( x1,y1, x2,y2, style=None ) :
+    data = { 'x1' : x1, 'x2' : x2, 'y1' : y1, 'y2' : y2 }
+    if style is None :
+        data['style'] = ''
+    else :
+        data['style'] = style
+        
+    return "\\draw [%(style)s] (%(x1)f,%(y1)f) -- (%(x2)f,%(y2)f) ; \n" % data
+
+
+def texhline( y, xmin, xmax, style=None ) :
+    return texline( xmin, y, xmax, y, style )
+
+def texvline( x, ymin, ymax, style=None ) :
+    return texline( x, ymin, x, ymax, style )
+
+
+
+
+def heightFunctionTex( S, T, ymin, ymax, z=None ) :
+    if z is None :
+        zplus = 0
+    else :
+        zplus = z
+        
+    str = "\\begin{tikzpicture}\n"
+    
+    # compute necessary data
+    segment = roadbm.ONESEGMENT( S, T )
+    intervals = roadbm.INTERVALS( segment )
+
+    
+    # draw the axis
+    # horizontal
+    #str += "\\draw [->] (%f,0) -- (%f,0) node [right] {$\\coordvar$} ;\n" % ( YMIN, YMAX+.5 )
+    str += texhline( 0., ymin, ymax + .5, style='->' )
+    #
+    str += "\\draw [thick] (%(ymax)f,-.15) -- (%(ymax)f,.15) " % { 'ymax' : ymax }
+    str += "node [above right] {$\\roadlen_\\roadvar$} ;\n"
+    # vertical
+    fmin, fmax = min( intervals ), max( intervals )
+    hmin, hmax = min( fmin + zplus, 0 ), max( fmax + zplus, 0 )
+    #np.floor( min( intervals ) )
+    #fmax = np.ceil( max( intervals ) )
+    data = { 'ymin' : ymin, 'fmin' : hmin-.25, 'fmax' : hmax+.25 }
+    str += "\\draw [->] (%(ymin)f,%(fmin)f) -- (%(ymin)f,%(fmax)f) " % data
+    str += "node [above] {$\\postcumarcs(y) = \\cumarcs(y) + \\numarcs$} ;\n"
+    # vertical ticks
+    for tick in np.arange(hmin,hmax+1,1) :
+        data = { 'tR' : ymin+.1, 'tL' : ymin-.1, 'tick' : tick }
+        str += "\\draw (%(tR)f,%(tick)d) -- (%(tL)f,%(tick)d) " % data
+        str += "node [left=5] {$%(tick)d$} ;\n" % data
+        
+    # place the X's and O's
+    str += texhline( zplus, ymin, ymax, style='dashed' )
+    for y, item in segment.items() :
+        phases = [ (item.P, '$\\times$' ), (item.Q, '$\\circ$') ]
+        for Y, mark in phases :
+            for i in Y : str += "\\draw (%f,%f) node {%s} ;\n" % ( y, zplus, mark )
+            
+    # place the levels
+    for f, ranges in intervals.items() :
+        h = f + zplus
+        for a,b in ranges :
+            label = ''
+            if a == '-' :
+                a = YMIN
+                label = "node [%s] {$\\numarcs_\\roadvar$}"
+                if h >= 0 :       # zr >= 0?
+                    label = label % "above"
+                else :
+                    label = label % "below"
+            if b == '+' :
+                b = YMAX
+                str += "\\draw (%f,%f) node [right] {$\\numarcs_\\roadvar + \\surplus_\\roadvar$} ;\n" % (b,h)
+                            
+            levelstr = "\\draw [thick] (%(yl)f,%(z)f) -- %(extra)s (%(yr)f,%(z)f) ;\n"
+            data = { 'yl' : a, 'yr' : b, 'z' : h, 'extra' : label }
+            str += levelstr % data
+            # place the shades
+            str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % data
+            
+    str += "\\end{tikzpicture}\n"
+    return str
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 if __name__ == '__main__' :
+    import argparse
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument( '--z', type=float, default=0 )
+    parser.add_argument( '--Hout', type=str, default='Hout.tex' )
+    parser.add_argument( '--Cout', type=str, default='Cout.tex' )
+    args = parser.parse_args()
+    
+    
     YMIN = -4.
     YMAX = 4.
     WIDTH = YMAX - YMIN
@@ -25,77 +135,21 @@ if __name__ == '__main__' :
         X = [ YMIN + WIDTH * np.random.rand() for i in xrange(5) ]
         O = [ YMIN + WIDTH * np.random.rand() for i in xrange(3) ]
     else :
-        zr = 1
+        zr = 5.75
         #X = [ -3.5, 2, 2.75 ]
         #O = [ -3., -2., 1., 2.25, 3. ]
         X = [ -2.5, 2, ]
         O = [ -2., -1., 1., 3. ]
         
-    segment = roadbm.ONESEGMENT( X, O )
-    intervals = roadbm.INTERVALS( segment )
-    
-    #segment = drawHeightFunction( X, O, YMIN, YMAX )['line']
-    #intervals = roadbm.INTERVALS( segment )
-    
-    """ H to tikz """
-    str = ''
-    str += "\\begin{tikzpicture}\n"
-    
-    # draw the axis
-    # horizontal
-    str += "\\draw [->] (%f,0) -- (%f,0) node [right] {$\\coordvar$} ;\n" % ( YMIN, YMAX+.5 )
-    str += "\\draw [thick] (%(ymax)f,-.15) -- (%(ymax)f,.15) " % { 'ymax' : YMAX }
-    str += "node [above] {$\\roadlen_\\roadvar$} ;\n"
-    # vertical
-    fmin = np.floor( min( intervals ) )
-    fmax = np.ceil( max( intervals ) )
-    str += "\\draw [->] (%(ymin)f,%(fmin)f) -- (%(ymin)f,%(fmax)f) " % { 'ymin' : YMIN, 'fmin' : fmin-.25, 'fmax' : fmax+.25 }
-    str += "node [above] {$\\postcumarcs(y;\\roadvar) = \\cumarcs(y;\\roadvar) + \\numarcs_\\roadvar$} ;\n"
-    # vertical ticks
-    for tick in np.arange(fmin,fmax+1,1) :
-        str += "\\draw (%(tR)f,%(tick)d) -- (%(tL)f,%(tick)d) " % { 'tR' : YMIN+.1, 'tL' : YMIN-.1, 'tick' : tick }
-        str += "node [left=5] {$%d$} ;\n" % tick
         
-    # place the X's and O's
-    for y, item in segment.items() :
-        phases = [ (item.P, '$\\times$' ), (item.Q, '$\\circ$') ]
-        for Y, mark in phases :
-            for i in Y : str += "\\draw (%f,0) node {%s} ;\n" % ( y, mark )
-            
-    # place the levels
-    for f, ranges in intervals.items() :
-        for a,b in ranges :
-            label = ''
-            if a == '-' :
-                a = YMIN
-                label = "node [%s] {$\\numarcs_\\roadvar$}"
-                if True :       # zr >= 0?
-                    label = label % "above"
-                else :
-                    label = label % "below"
-            if b == '+' :
-                b = YMAX
-                str += "\\draw (%f,%f) node [right] {$\\numarcs_\\roadvar + \\surplus_\\roadvar$} ;\n" % (b,f)
-                            
-            levelstr = "\\draw [thick] (%(yl)f,%(z)f) -- %(extra)s (%(yr)f,%(z)f) ;\n"
-            DATA = { 'yl' : a, 'yr' : b, 'z' : f, 'extra' : label }
-            str += levelstr % DATA
-            # place the shades
-            str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % DATA
-            
-    str += "\\end{tikzpicture}\n"
-    
-    f = open( 'Hout.tex', 'w' )
+    str = heightFunctionTex( X, O, YMIN, YMAX, args.z )
+    f = open( args.Hout, 'w' )
     f.write( str )
     f.close()
 
-
-
-
-
-    
     
     """ C to tikz """
+    segment = roadbm.ONESEGMENT( X, O )
     meas = roadbm.MEASURE( segment, YMIN, YMAX )
     obj = roadbm.OBJECTIVE( meas )
     Cf = roadbm.costWrapper( obj )
