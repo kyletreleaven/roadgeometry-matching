@@ -44,7 +44,6 @@ def heightFunctionTex( S, T, ymin, ymax, z=None ) :
     # compute necessary data
     segment = roadbm.ONESEGMENT( S, T )
     intervals = roadbm.INTERVALS( segment )
-
     
     # draw the axis
     # horizontal
@@ -81,14 +80,14 @@ def heightFunctionTex( S, T, ymin, ymax, z=None ) :
         for a,b in ranges :
             label = ''
             if a == '-' :
-                a = YMIN
+                a = ymin
                 label = "node [%s] {$\\numarcs_\\roadvar$}"
                 if h >= 0 :       # zr >= 0?
                     label = label % "above"
                 else :
                     label = label % "below"
             if b == '+' :
-                b = YMAX
+                b = ymax
                 str += "\\draw (%f,%f) node [right] {$\\numarcs_\\roadvar + \\surplus_\\roadvar$} ;\n" % (b,h)
                             
             levelstr = "\\draw [thick] (%(yl)f,%(z)f) -- %(extra)s (%(yr)f,%(z)f) ;\n"
@@ -99,6 +98,63 @@ def heightFunctionTex( S, T, ymin, ymax, z=None ) :
             
     str += "\\end{tikzpicture}\n"
     return str
+
+
+
+
+def discreteCostTex( S, T, ymin, ymax, zmin, zmax, zplus=None ) :
+    segment = roadbm.ONESEGMENT( S, T )
+    meas = roadbm.MEASURE( segment, ymin, ymax )
+    obj = roadbm.OBJECTIVE( meas )
+    Cf = roadbm.costWrapper( obj )
+    
+    Z = range(zmin,zmax+1)
+    C = [ Cf(z) for z in Z ]
+    cmin, cmax = min(C), max(C)
+    
+    # obtain the 'star'
+    ZMIN, ZMAX = -max( meas ), -min( meas )
+    CC = [ ( Cf(z), z ) for z in range(ZMIN,ZMAX+1) ]
+    COPT, ZOPT = min(CC)
+    
+    
+    str = "\\begin{tikzpicture}[x=1cm,y=.1cm]\n"
+    # draw the axis
+    # horizontal
+    horz_level = np.floor(cmin)
+    data = { 'zmin' : zmin, 'zmax' : zmax, 'horz' : horz_level }
+    fmt = "\\draw [->] (%(zmin)d,%(horz)d) -- (%(zmax)f,%(horz)d) node [right] {$\\coordvar$} ;\n" 
+    str +=  fmt % data
+    # vertical
+    str += "\\draw [->] (0,%(cmin)f-1) -- (0,%(cmax)f) " % { 'cmin' : cmin, 'cmax' : cmax }
+    str += "node [above] {$\\cost(\\numarcs)$} ;\n"
+    # horizontal ticks
+    for tick in np.arange(zmin,zmax+1,1) :
+        data = { 'tick' : tick, 'horz' : horz_level }
+        str += "\\draw (%(tick)d,%(horz)f-.1) -- (%(tick)f,%(horz)f+.1) " % data
+        str += "node [below=5] {$%d$} ;\n" % tick
+        
+    # scatter
+    for z, c in zip( Z, C ) :
+        if z == ZOPT :
+            str += '\\draw [fill] (%f,%f) node {$\\star$} ;\n' % (z,c)       # {$\\circ$}'
+        else :
+            str += '\\draw [fill] (%f,%f) circle (.05cm) ;\n' % (z,c)       # {$\\circ$}'
+        
+    if zplus is not None and zmin <= zplus and zplus <= zmax :
+        str += '\\draw [] (%f,%f) circle (.2cm) ;\n' % (zplus,Cf(zplus))       # {$\\circ$}'
+        
+    str += "\\end{tikzpicture}\n"
+    return str
+    
+    
+    
+    
+    
+def costFunctionAnimationTex( S, T, ymin, ymax, z=None ) :
+    pass
+
+
 
 
 
@@ -214,7 +270,8 @@ if __name__ == '__main__' :
     f.write( str )
     f.close()
     
-    str = costFunctionTex( X, O, YMIN, YMAX, args.z )
+    #str = costFunctionTex( X, O, YMIN, YMAX, args.z )
+    str = discreteCostTex( X, O, YMIN, YMAX, -4, 4, args.z )
     f = open( args.Cout, 'w' )
     f.write( str )
     f.close()
