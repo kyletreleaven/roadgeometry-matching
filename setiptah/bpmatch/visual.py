@@ -70,7 +70,7 @@ def heightFunctionTex( S, T, ymin, ymax, z=None, steps=None ) :
     # place the X's and O's
     str += texhline( zplus, ymin, ymax, style='dashed' )
     for y, item in segment.items() :
-        phases = [ (item.P, '$\\times$' ), (item.Q, '$\\circ$') ]
+        phases = [ (item.P, '${\\color{red}\\times}$' ), (item.Q, '${\\color{blue}\\circ}$') ]
         for Y, mark in phases :
             for i in Y : str += "\\draw (%f,%f) node {%s} ;\n" % ( y, zplus, mark )
             
