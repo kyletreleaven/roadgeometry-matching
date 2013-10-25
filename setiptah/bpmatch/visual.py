@@ -33,7 +33,7 @@ def texvline( x, ymin, ymax, style=None ) :
 
 
 
-def heightFunctionTex( S, T, ymin, ymax, z=None ) :
+def heightFunctionTex( S, T, ymin, ymax, z=None, steps=None ) :
     if z is None :
         zplus = 0
     else :
@@ -75,27 +75,39 @@ def heightFunctionTex( S, T, ymin, ymax, z=None ) :
             for i in Y : str += "\\draw (%f,%f) node {%s} ;\n" % ( y, zplus, mark )
             
     # place the levels
+    arr = bintrees.RBTree()
     for f, ranges in intervals.items() :
-        h = f + zplus
         for a,b in ranges :
-            label = ''
-            if a == '-' :
-                a = ymin
-                label = "node [%s] {$\\numarcs_\\roadvar$}"
-                if h >= 0 :       # zr >= 0?
-                    label = label % "above"
-                else :
-                    label = label % "below"
-            if b == '+' :
-                b = ymax
-                str += "\\draw (%f,%f) node [right] {$\\numarcs_\\roadvar + \\surplus_\\roadvar$} ;\n" % (b,h)
-                            
-            levelstr = "\\draw [thick] (%(yl)f,%(z)f) -- %(extra)s (%(yr)f,%(z)f) ;\n"
-            data = { 'yl' : a, 'yr' : b, 'z' : h, 'extra' : label }
-            str += levelstr % data
-            # place the shades
-            str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % data
+            lb = a
+            if lb == '-' : lb = -np.inf
+            arr[lb] = ( (a,b), f )
             
+    #print arr
+    #print [ v for v in arr.values() ]
+    
+    iter = arr.values()
+    if steps is not None : iter = itertools.islice( iter, steps )
+    for (a,b), f in iter :
+    #for f, ranges in intervals.items() :
+        h = f + zplus
+        label = ''
+        if a == '-' :
+            a = ymin
+            label = "node [%s] {$\\numarcs_\\roadvar$}"
+            if h >= 0 :       # zr >= 0?
+                label = label % "above"
+            else :
+                label = label % "below"
+        if b == '+' :
+            b = ymax
+            str += "\\draw (%f,%f) node [right] {$\\numarcs_\\roadvar + \\surplus_\\roadvar$} ;\n" % (b,h)
+                        
+        levelstr = "\\draw [thick] (%(yl)f,%(z)f) -- %(extra)s (%(yr)f,%(z)f) ;\n"
+        data = { 'yl' : a, 'yr' : b, 'z' : h, 'extra' : label }
+        str += levelstr % data
+        # place the shades
+        str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % data
+        
     str += "\\end{tikzpicture}\n"
     return str
 
