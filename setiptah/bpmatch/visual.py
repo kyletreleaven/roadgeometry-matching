@@ -39,7 +39,8 @@ def heightFunctionTex( S, T, ymin, ymax, z=None, steps=None ) :
     else :
         zplus = z
         
-    str = "\\begin{tikzpicture}\n"
+    #str = "\\begin{tikzpicture}\n"
+    str = ''
     
     # compute necessary data
     segment = roadbm.ONESEGMENT( S, T )
@@ -108,7 +109,7 @@ def heightFunctionTex( S, T, ymin, ymax, z=None, steps=None ) :
         # place the shades
         str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % data
         
-    str += "\\end{tikzpicture}\n"
+    #str += "\\end{tikzpicture}\n"
     return str
 
 
@@ -130,7 +131,8 @@ def discreteCostTex( S, T, ymin, ymax, zmin, zmax, zplus=None ) :
     COPT, ZOPT = min(CC)
     
     
-    str = "\\begin{tikzpicture}[x=1cm,y=.1cm]\n"
+    #str = "\\begin{tikzpicture}[x=1cm,y=.1cm]\n"
+    str = ''
     # draw the axis
     # horizontal
     horz_level = np.floor(cmin)
@@ -156,7 +158,7 @@ def discreteCostTex( S, T, ymin, ymax, zmin, zmax, zplus=None ) :
     if zplus is not None and zmin <= zplus and zplus <= zmax :
         str += '\\draw [] (%f,%f) circle (.2cm) ;\n' % (zplus,Cf(zplus))       # {$\\circ$}'
         
-    str += "\\end{tikzpicture}\n"
+    #str += "\\end{tikzpicture}\n"
     return str
     
     
