@@ -22,9 +22,7 @@ def get_road_data( road, roadnet ) :
     for _,__,key, data in roadnet.edges_iter( keys=True, data=True ) :
         if key == road : return data
 
-        
-        
-        
+
 
 
 """ ALGORITHM HIGH LEVEL """
@@ -39,7 +37,7 @@ class ROADSBIPARTITE :
         pass
     
     @classmethod
-    def STATISTIC(cls, S, T, roadnet ) :
+    def FLOW(cls, S, T, roadnet ) :
         pass
     
     
@@ -436,7 +434,11 @@ if __name__ == '__main__' :
     plt.close('all')
 
     roadnet = nx.MultiDiGraph()
-    roadnet.add_edge( 0,1, 'N', length=1. )
+    if True :
+        roadnet.add_edge( 0,1, 'N', length=1. )
+    else :
+        # to test one-way roads capabilities
+        roadnet.add_edge( 0,1, 'N', length=1., oneway=True )
     roadnet.add_edge( 1,2, 'E', length=1. )
     roadnet.add_edge( 2,3, 'S', length=1. )
     roadnet.add_edge( 3,0, 'W', length=1. )
