@@ -486,9 +486,12 @@ class UniformDist :
     
     
 if __name__ == '__main__' :
-    import matplotlib.pyplot as plt
-    plt.close('all')
-
+    VISUAL = False
+    if VISUAL :
+        import matplotlib.pyplot as plt
+        plt.close('all')
+        
+        
     roadnet = nx.MultiDiGraph()
     if True :
         roadnet.add_edge( 0,1, 'N', length=1. )
@@ -509,14 +512,15 @@ if __name__ == '__main__' :
     
     z = np.arange(-NUMPOINT,NUMPOINT,.25)
     objective_dict = WRITEOBJECTIVES( PP, QQ, roadnet )
-    for road, Cz in objective_dict.iteritems() :
-        cost = costWrapper( Cz )
-        C = [ cost(zz) for zz in z ]
-        plt.figure()
-        plt.plot( z, C, '--', marker='x' )
-        
-        
     
+    if VISUAL :
+        for road, Cz in objective_dict.iteritems() :
+            cost = costWrapper( Cz )
+            C = [ cost(zz) for zz in z ]
+            plt.figure()
+            plt.plot( z, C, '--', marker='x' )
+            
+            
     match = ROADSBIPARTITEMATCH( PP, QQ, roadnet )
     costs = MATCHCOSTS( match, PP, QQ, roadnet )
     cost = ROADMATCHCOST( match, PP, QQ, roadnet )
