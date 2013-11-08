@@ -8,6 +8,8 @@ from setiptah.basic_graph.mygraph import mygraph
 from setiptah.basic_graph.dijkstra import Dijkstra
 from setiptah.basic_graph.toposort import toposort
 
+PHASE_ERROR = 10**-6        # having to mess with this is annoying me
+
 
 class line :
     def __init__(self, slope ) :
@@ -226,7 +228,7 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
         #if len( CERT ) > 0 : print "STAGE ONE CERTIFICATE CORRUPT!"
         # am considering removing this assertion, but leaving the stage two one
         # could be running into problems where the functional form is defined beyond saturation bounds
-        RELAXCERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < -10**-10 }
+        RELAXCERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < -PHASE_ERROR }
         if len( RELAXCERT ) > 0 : 
             print RELAXCERT
             print "STAGE ONE CERTIFICATE CORRUPT!"
@@ -298,7 +300,7 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
         # at end of each stage, verify the optimality certificate (should be empty every time)
         CERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < 0. }
         print 'certificate, end stage TWO: %s' % repr( CERT )
-        RELAXCERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < -10**-10 }
+        RELAXCERT = { re : c for (re,c) in redcost.iteritems() if re in rgraph.edges() and c < -PHASE_ERROR }
         if len( RELAXCERT ) > 0 :
             print RELAXCERT
             print "STAGE TWO CERTIFICATE CORRUPT!"
