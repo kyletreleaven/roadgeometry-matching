@@ -63,12 +63,44 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
     from nxflow.capscaling import SOLVER
     assist = SOLVER( roadnet, surplus_dict, objective_dict )
     
+    if False :		# activate for debug
+        imbalance = CHECKFLOW( assist, roadnet, surplus_dict )
+    else :
+        imbalance = []
+        
+    try :
+        assert len( imbalance ) <= 0
+    except Exception as ex :
+        ex.imbal = imbalance
+        raise ex
+    
     topograph = TOPOGRAPH( segment_dict, assist, roadnet )
     
-    match = TRAVERSE( topograph )
-    MATCH.extend( match )
+    try :
+        match = TRAVERSE( topograph )
+    except Exception as ex :
+        ex.assist = assist
+        ex.topograph = topograph
+        raise ex
     
+    MATCH.extend( match )
     return MATCH
+
+
+
+
+
+
+def CHECKFLOW( flow, roadnet, surplus ) :
+    balance = { u : 0. for u in roadnet.nodes_iter() }
+    for i, j, road in roadnet.edges_iter( keys=True ) :
+        balance[i] -= flow.get( road, 0. )
+        balance[j] += flow.get( road, 0. ) + surplus.get( road, 0. )
+        
+    return { k:v for k,v in balance.iteritems() if v != 0. }
+
+
+
 
 
 def WRITEOBJECTIVES( P, Q, roadnet ) :
@@ -278,8 +310,8 @@ def TOPOGRAPH( segment_dict, assist, roadnet ) :
     
     special = dict()
     for u in roadnet.nodes_iter() :
-        data = TwoQueues()
-        node = terminal( data )
+        #data = TwoQueues()
+        node = terminal( None )
         special[u] = node
         
     for u,v, road, data in roadnet.edges_iter( keys=True, data=True ) :
@@ -301,6 +333,28 @@ def TOPOGRAPH( segment_dict, assist, roadnet ) :
     return topograph
     
     
+def CHECKTOPO( topograph ) :
+    def balance( u ) :
+        # starting balance
+        q = u.q
+        if q is None :
+            b = 0
+        else :
+            b = len( q.P ) - len( q.Q )
+            
+        # plus input
+        for e in topograph.in_edges_iter( u ) :
+            b += topograph.get_edge_data( *e ).get('weight')
+            
+        # minus output
+        for e in topograph.out_edges_iter( u ) :
+            b -= topograph.get_edge_data( *e ).get('weight')
+            
+        return b
+            
+    return [ u for u in topograph.nodes() if balance(u) != 0 ]
+    
+    
 def TRAVERSE( topograph ) :
     match = []
     nodes_ord = nx.topological_sort( topograph )
@@ -310,19 +364,21 @@ def TRAVERSE( topograph ) :
     
     for u in nodes_ord :
         L = LISTS[u]
+        
         queue = u.q
-        
-        if len( queue.P ) > 0 : L.extend( queue.P )
-        
-        for k in range( len( queue.Q ) ) :
-            i = L.pop(0)
-            match.append( (i,queue.Q[k] ) )
+        if queue is not None :
+            # collect points from S
+            L.extend( queue.P )
+            
+            # dispatch points in T
+            for j in queue.Q :
+                i = L.pop(0)
+                match.append( (i,j) )
         
         for _,v, data in topograph.out_edges_iter( u, data=True ) :
             w = data.get('weight')
-            pre, post = L[:w], L[w:]
-            LISTS[v].extend( pre )
-            L = post
+            prefix, L = L[:w], L[w:]
+            LISTS[v].extend( prefix )
             
     return match
 
