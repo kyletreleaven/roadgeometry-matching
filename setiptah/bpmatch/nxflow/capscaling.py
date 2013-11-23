@@ -63,7 +63,12 @@ def SOLVER( roadnet, surplus, objectives ) :
             network.add_edge( (road,-1), j, i )
             cost[ (road,-1) ] = ncc
             
-    f = MinConvexCostFlow( network, {}, supply, cost )
+    # we need to compute the size U of the first cvxcost algorithm phase
+    #U = sum([ len( obj_dict ) for obj_dict in objectives.values() ])
+    # below is almost certainly just as good a bound, but I'm a scaredy-cat
+    U = sum([ len( obj_dict ) - 2 for obj_dict in objectives.values() ])
+    
+    f = MinConvexCostFlow( network, {}, supply, cost, U )
     
     flow = {}
     for i, j, road in roadnet.edges_iter( keys=True ) :
