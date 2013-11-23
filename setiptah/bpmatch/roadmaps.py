@@ -9,6 +9,11 @@ import networkx as nx
 
 """ my dependencies """
 import setiptah.roadgeometry.roadmap_basic as ROAD
+if True :       # not sure which way is right...
+    RoadAddress = ROAD.RoadAddress
+else :
+    from setiptah.roadgeometry.roadmap_basic import RoadAddress
+
 import setiptah.roadgeometry.astar_basic as ASTAR
 
 
@@ -61,7 +66,14 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
         #objective_dict[road] = objective
         
     from nxflow.capscaling import SOLVER
-    assist = SOLVER( roadnet, surplus_dict, objective_dict )
+    try :
+        assist = SOLVER( roadnet, surplus_dict, objective_dict )
+    except Exception as ex :
+        ex.segs = segment_dict
+        ex.surp = surplus_dict
+        ex.obj = objective_dict
+        
+        raise ex
     
     if False :		# activate for debug
         imbalance = CHECKFLOW( assist, roadnet, surplus_dict )
@@ -501,6 +513,9 @@ if __name__ == '__main__' :
     roadnet.add_edge( 1,2, 'E', length=1. )
     roadnet.add_edge( 2,3, 'S', length=1. )
     roadnet.add_edge( 3,0, 'W', length=1. )
+    
+    if True :
+        roadnet.add_edge( 0,4, 'dangler', length=1. )
     
     sampler = UniformDist( roadnet )
     
