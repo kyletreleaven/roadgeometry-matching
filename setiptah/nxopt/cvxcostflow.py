@@ -100,7 +100,7 @@ class ALGGLOBAL :
     REGULAR = ':'
     AUGMENTING = 'AUG'
 
-def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
+def MinConvexCostFlow( network, capacity, supply, cost, U, epsilon=None ) :
     """
     see "Fragile" version;
     this wrapper adds robustness:
@@ -109,17 +109,17 @@ def MinConvexCostFlow( network, capacity, supply, cost, epsilon=None ) :
     """
     
     # create a robust instance
-    network_aug, capacity_rename, cost_aug = MCCFRobustInstance( network, capacity, supply, cost )
+    network_aug, capacity_rename, cost_aug = MCCFRobustInstance( network, capacity, supply, cost, U )
     
     # run the "fragile" version
-    flow = FragileMCCF( network_aug, capacity_rename, supply, cost_aug, epsilon )
+    flow = FragileMCCF( network_aug, capacity_rename, supply, cost_aug, U, epsilon )
     
     # prepare output --- perhaps do some feasibility checking in the future
     res = { e : x for (type,e), x in flow.iteritems() if type == ALGGLOBAL.REGULAR }
     return res
 
 
-def MCCFRobustInstance( network, capacity, supply, cost ) :
+def MCCFRobustInstance( network, capacity, supply, cost, U ) :
     network_aug = mygraph()
     capacity_rename = {}
     cost_aug = {}
@@ -132,11 +132,10 @@ def MCCFRobustInstance( network, capacity, supply, cost ) :
         if e in capacity : capacity_rename[ newedge ] = capacity[e]
         if e in cost : cost_aug[ newedge ] = cost[e]
         
-    # add a directed cycles, with prohibitive cost
-    U = sum([ b for b in supply.values() if b > 0. ])
-    # since costs are convex, flow cannot have cost greater than M
-    M = sum([ c(U) for c in cost.values() ])
-    prohibit = line(M)
+    # add a directed cycle, with prohibitive cost
+    CBOUND = sum([ c(U) for c in cost.values() ])
+    # since costs are convex, a feasible flow cannot have cost greater than CBOUND
+    prohibit = line(CBOUND)
     
     NODES = network.nodes()
     edgegen = itertools.count()
@@ -149,8 +148,8 @@ def MCCFRobustInstance( network, capacity, supply, cost ) :
     
     
     
-
-def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
+    
+def FragileMCCF( network, capacity_in, supply, cost, U, epsilon=None ) :
     """
     network is a mygraph (above)
     capacity is a dictionary from E -> real capacities
@@ -170,19 +169,24 @@ def FragileMCCF( network, capacity_in, supply, cost, epsilon=None ) :
     excess = {}
     
     """ ALGORITHM """
-    U = sum([ b for b in supply.values() if b > 0. ])
-    print 'total supply: %f' % U
+    # computing U from supplies was wrong, it must be passed in now
+    #U = sum([ b for b in supply.values() if b > 0. ])
+    #print 'total supply: %f' % U
     
     # trimming infinite capacities to U allows negative initial slopes 
-    # the initial flow may not be Delta-optimality at the beginning of Stage One,
+    # the initial flow may not be Delta-optimal at the beginning of Stage One,
     # but achieves Delta-optimality by the end, by saturating any negative cost edges.
     # most treatments fail to consider negative initial slope, which is totally possible... 
     capacity = {}
     for e in network.edges() :
         capacity[e] = min( U, capacity_in.get( e, np.Inf ) )
         
+    try :
+        temp = math.floor( math.log(U,2) )
+    except Exception as ex :
+        ex.U = U
+        raise ex
         
-    temp = math.floor( math.log(U,2) )
     Delta = 2.**temp
     print 'Delta: %d' % Delta
     
