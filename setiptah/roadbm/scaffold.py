@@ -1,3 +1,8 @@
+"""
+I have reason to believe that the scaffold problem on road networks is much harder
+than the scaffold problem on a line; like formally hard.
+Therefore, I am halting development on this branch.
+"""
 
 import itertools
 
@@ -105,6 +110,10 @@ def LOOSENCOST( segment, length ) :
                 else :
                     level[i] += width
                     
+    # SEEN is a nested dictionary of:
+    #    levels
+    #        points
+    #            the "cost" (generally negative) of choosing to remove point from level 
     return SEEN
 
 
@@ -118,8 +127,8 @@ if __name__ == '__main__' :
     plt.close('all')
     
     LENGTH = 10.
-    NS = 10
-    NT = 5
+    NS = 100
+    NT = 50
     
     S = [ LENGTH * np.random.rand() for k in range(NS) ]
     T = [ LENGTH * np.random.rand() for k in range(NT) ]
@@ -187,7 +196,7 @@ if __name__ == '__main__' :
             plt.scatter( S, np.zeros(NS), marker='x' )
             plt.scatter( T, np.zeros(NT), marker='o' )
 
-        if False :
+        if True :
             fig = plt.figure()
             ax = fig.add_subplot(111,projection='3d')
             ax.plot_wireframe( EE, ZZ, SURF )

@@ -27,7 +27,9 @@ if __name__ == '__main__' :
     plt.close('all')
     
     import networkx as nx
-    import setiptah.bpmatch.roadmaps as roadbm
+    #import setiptah.bpmatch.roadmaps as roadbm
+    import setiptah.roadbm.bm as roadbm
+    
     
     
     roadnet = nx.MultiDiGraph()

@@ -4,7 +4,7 @@
 from setiptah.basic_graph.mygraph import mygraph
 from setiptah.nxopt.cvxcostflow import MinConvexCostFlow
 
-import setiptah.bpmatch.roadmaps as roadbm
+import setiptah.roadbm.bm as roadbm
 
 
 class negativeWrapper :
