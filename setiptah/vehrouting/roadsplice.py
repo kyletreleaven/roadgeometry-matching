@@ -10,14 +10,18 @@ plt.close('all')
 import networkx as nx
 import bintrees
 
-import setiptah.roadgeometry.roadmap_basic as ROAD
+
 import setiptah.roadgeometry.astar_basic as ASTAR
+import setiptah.roadgeometry.roadmap_basic as ROAD
+import setiptah.roadgeometry.roadmap_paths as roadpaths
+
 import setiptah.roadbm.bm as roadbm
 
 
 
 
 """ utility """
+class token : pass
 
 def get_road_data( road, roadnet ) :
     for _,__,key, data in roadnet.edges_iter( keys=True, data=True ) :
@@ -184,8 +188,7 @@ def CYCLECOST( cycle, demands, roadnet ) :
     carry = [ ROAD.distance( roadnet, addr(dem.pick), addr(dem.delv) ) for dem in demands ]
     
     edges = zip( cycle, cycle[1:] + cycle[:1] )
-    
-    print edges
+    #print edges
     
     edges = [ ( demands[i], demands[j] ) for i,j in edges ] 
     empty = [ ROAD.distance( roadnet, addr(dem1.delv), addr(dem2.pick) ) for dem1,dem2 in edges ]
@@ -248,6 +251,80 @@ class UniformDist :
     
 
 
+def SPLITTOUR( tour, N, demands, roadmap ) :
+    """
+    split the tour (seq. of indices) of demands (list of demands) on roadmap
+    into k pieces
+    """
+    tours = []
+    tourlen = CYCLECOST( tour, demands, roadmap )
+    
+    fragtarget = float(tourlen) / N
+    EDGES = zip( tour[-1:] + tour[:-1], tour )      # cycle; first "prev" is last
+    x, y = [ ROAD.RoadAddress(None,None) for i in range(2) ]    # storage
+    for k in range(N) :
+        frag = []
+        fraglen = 0.
+        while fraglen < fragtarget :
+            if not len( EDGES ) > 0 : break
+            i, j = EDGES.pop(0)
+            prev, curr = DEMANDS[i], DEMANDS[j]
+            p, q, r = prev.delv, curr.pick, curr.delv
+            # fetch
+            x.init(*p) ; y.init(*q)
+            exten = roadpaths.minpath( x, y, roadnet )
+            y.init(*r)
+            exten = roadpaths.pathExtend( exten, y, roadnet )
+            extenlen = roadpaths.pathLength( exten )
+            
+            frag.append(j)
+            fraglen += roadpaths.pathLength( exten )
+            #print exten, extenlen, fraglen, fragtarget
+            
+        tours.append( frag )
+    return tours
+
+
+def ASSIGNFRAGS( tours, agentLocs, demands, roadmap ) :
+    """
+    assign the fragments to agents in accordance with a minimum matching
+    from each agent (its position) to some origin on the tour
+    """
+    # compute distance to tour (some pickup) from each agent
+    graph = nx.Graph()
+    x = ROAD.RoadAddress(None,None)
+    
+    for agent, agentLoc in agentLocs.iteritems() :
+        t = token()
+        t.agent = agent
+        def cost( demidx ) :
+            x.init( *demands[demidx].pick )
+            return ROAD.distance( roadmap, agentLoc, x, 'length' )
+        
+        for touridx, tour in enumerate( tours ) :
+            options = [ ( cost(demidx), k ) for k, demidx in enumerate(tour) ]
+            copt, kopt = min( options )
+            
+            # negative weights for MIN weight
+            graph.add_edge( t, touridx, weight = -copt, start_at = kopt )
+            
+    # get optimal matching
+    MATCH = nx.matching.max_weight_matching( graph, maxcardinality=True )
+    
+    assign = {}
+    for touridx, tour in enumerate( tours ) :
+        u = MATCH[touridx]
+        k = graph.get_edge_data( u, touridx ).get( 'start_at' )
+        agent = u.agent
+        order = tour[k:] + tour[:k]
+        assign[agent] = order
+        
+    return assign
+
+
+
+
+
 
 if __name__ == '__main__' :
     
@@ -272,6 +349,14 @@ if __name__ == '__main__' :
     
     tour = ROADSSPLICE( DEMANDS, roadnet )
     cost = CYCLECOST( tour, DEMANDS, roadnet )
+    
+    N = 3
+    agentLocs = { 'agent%d' % i : ROAD.RoadAddress( *sampler.sample() ) for i in range(N) }
+    
+    tours = SPLITTOUR( tour, N, DEMANDS, roadnet )
+    assign = ASSIGNFRAGS( tours, agentLocs, DEMANDS, roadnet )
+    
+    
     
     
     #order = ORDERPOINTS( PP, tour )
