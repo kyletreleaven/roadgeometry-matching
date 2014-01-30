@@ -10,9 +10,9 @@ plt.close('all')
 import networkx as nx
 import bintrees
 
-import roadmap_basic as ROAD
-import astar_basic as ASTAR
-import bm_roadnet
+import setiptah.roadgeometry.roadmap_basic as ROAD
+import setiptah.roadgeometry.astar_basic as ASTAR
+import setiptah.roadbm.bm as roadbm
 
 
 
@@ -33,10 +33,14 @@ class demand :
         self.delv = delv
 
 def ROADSSPLICE( demands, roadnet ) :
+    """
+    roadmap must be completely undirected;
+    otherwise, another subtour connecting heuristic must be used
+    """
     QQ = [ dem.pick for dem in demands ]
     PP = [ dem.delv for dem in demands ]
     
-    match = bm_roadnet.ROADSBIPARTITEMATCH( PP, QQ, roadnet )
+    match = roadbm.ROADSBIPARTITEMATCH( PP, QQ, roadnet )
     #cycles = CYCLEFACTOR( match )
     tour = DOUBLETOUR( roadnet )
     order = ORDERPOINTS( QQ, tour )
@@ -83,6 +87,7 @@ def CYCLEFACTOR( match ) :
 
 class traversal :
     def __init__(self, road, forward ) :
+        """ forward is a boolean flag, i.e., forward_not_backward """
         self.road = road
         self.forward = forward
         
