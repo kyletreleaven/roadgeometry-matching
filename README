@@ -7,4 +7,4 @@ requires :
 	networkx
 	bintrees
 
-Test: Run the setiptah/bpmatch/roadmaps.py module as a script.
+Test: Run the setiptah/roadbm/bm.py module as a script.
