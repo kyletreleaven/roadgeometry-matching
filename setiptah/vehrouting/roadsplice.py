@@ -182,16 +182,16 @@ def ORDERPOINTS( points, tour ) :
 
 """ MATCH TESTING Utilities """
 
-def CYCLECOST( cycle, demands, roadnet ) :
+def CYCLECOST( cycle, demands, roadnet, length_attr='length' ) :
     addr = lambda p : ROAD.RoadAddress( *p )
     
-    carry = [ ROAD.distance( roadnet, addr(dem.pick), addr(dem.delv) ) for dem in demands ]
+    carry = [ ROAD.distance( roadnet, addr(dem.pick), addr(dem.delv), length_attr ) for dem in demands ]
     
     edges = zip( cycle, cycle[1:] + cycle[:1] )
     #print edges
     
     edges = [ ( demands[i], demands[j] ) for i,j in edges ] 
-    empty = [ ROAD.distance( roadnet, addr(dem1.delv), addr(dem2.pick) ) for dem1,dem2 in edges ]
+    empty = [ ROAD.distance( roadnet, addr(dem1.delv), addr(dem2.pick), length_attr ) for dem1,dem2 in edges ]
     return sum( carry ) + sum( empty )
 
 
@@ -262,19 +262,20 @@ def SPLITTOUR( tour, N, demands, roadmap ) :
     fragtarget = float(tourlen) / N
     EDGES = zip( tour[-1:] + tour[:-1], tour )      # cycle; first "prev" is last
     x, y = [ ROAD.RoadAddress(None,None) for i in range(2) ]    # storage
+    
     for k in range(N) :
         frag = []
         fraglen = 0.
         while fraglen < fragtarget :
             if not len( EDGES ) > 0 : break
             i, j = EDGES.pop(0)
-            prev, curr = DEMANDS[i], DEMANDS[j]
+            prev, curr = demands[i], demands[j]
             p, q, r = prev.delv, curr.pick, curr.delv
             # fetch
             x.init(*p) ; y.init(*q)
-            exten = roadpaths.minpath( x, y, roadnet )
+            exten = roadpaths.minpath( x, y, roadmap )
             y.init(*r)
-            exten = roadpaths.pathExtend( exten, y, roadnet )
+            exten = roadpaths.pathExtend( exten, y, roadmap )
             extenlen = roadpaths.pathLength( exten )
             
             frag.append(j)
@@ -302,7 +303,11 @@ def ASSIGNFRAGS( tours, agentLocs, demands, roadmap ) :
             return ROAD.distance( roadmap, agentLoc, x, 'length' )
         
         for touridx, tour in enumerate( tours ) :
-            options = [ ( cost(demidx), k ) for k, demidx in enumerate(tour) ]
+            if len( tour ) > 0 :
+                options = [ ( cost(demidx), k ) for k, demidx in enumerate(tour) ]
+            else :
+                options = [ ( 0., 0 ) ]     # empty tour
+                
             copt, kopt = min( options )
             
             # negative weights for MIN weight
@@ -320,6 +325,20 @@ def ASSIGNFRAGS( tours, agentLocs, demands, roadmap ) :
         assign[agent] = order
         
     return assign
+
+
+def SPLITANDASSIGN( tour, agentLocs, demands, roadmap ) :
+    frags = SPLITTOUR( tour, len( agentLocs ), demands, roadmap )
+    assign = ASSIGNFRAGS( frags, agentLocs, demands, roadmap )
+    return assign
+
+
+def ROADS_kSPLICE( demands, agentLocs, roadmap ) :
+    tour = ROADSSPLICE( demands, roadmap )
+    assign = SPLITANDASSIGN( tour, agentLocs, demands, roadmap )
+    return assign 
+
+
 
 
 
