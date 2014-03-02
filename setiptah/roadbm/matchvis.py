@@ -155,8 +155,9 @@ def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
             xv, yv = posv
             options = { 'color' : 'k',
                        'alpha' : .6,
+                       'linewidth' : score
                         }
-            ax.plot( [xu,xv], [yu,yv], linewidth=score, solid_capstyle='butt',
+            ax.plot( [xu,xv], [yu,yv], solid_capstyle='butt',
                      # butt style prevents awkward overlap of segments
                      zorder=ZTRAILS,
                      **options )
@@ -164,13 +165,16 @@ def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
     # plot the points on top, so visible; this isn't working
     # show S points in red
     positions = [ position(addr, roadmap, pos) for addr in S ]
-    options = { 'marker' : 'x' }
+    options = {
+               #'marker' : 'x',
+               's' : 80
+               }
     X, Y = pointsToXY( positions )
-    ax.scatter( X, Y, color='r', zorder=ZPOINTS, **options )
+    ax.scatter( X, Y, color='r', zorder=ZPOINTS, marker='x', **options )
     # show T points in blue
     positions = [ position(addr, roadmap, pos).tolist() for addr in T ]
     X, Y = pointsToXY( positions )
-    ax.scatter( X, Y, color='b', zorder=ZPOINTS, **options )
+    ax.scatter( X, Y, color='b', zorder=ZPOINTS, marker='$\circ$', **options )
 
 
 
@@ -185,7 +189,12 @@ if __name__ == '__main__' :
     args = parser.parse_args()
     
     N = args.number
-    interchanges = [ np.random.rand(2) for i in xrange(N) ]
+    def sampledisc() :
+        while True :
+            p = np.random.rand(2)
+            if np.linalg.norm( p ) < 1 : return p
+            
+    interchanges = [ sampledisc() for i in xrange(N) ]
     
     import scipy.spatial as spatial
     """ Connect points using a Delaunay triangulation """

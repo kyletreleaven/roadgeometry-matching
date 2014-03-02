@@ -21,14 +21,31 @@ if __name__ == '__main__' :
     
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument( '--roads', type=int, default=10 )
+    parser.add_argument( '--roads', type=int, default=6 )
     parser.add_argument( '--points', type=int, default=100 )
     args = parser.parse_args()
     
     
     """ get N network vertices """
     N = args.roads
-    interchanges = [ np.random.rand(2) for i in xrange(N) ]
+    
+    def sampledisc() :
+        while True :
+            p = np.random.rand(2)
+            if np.linalg.norm( p ) < 1 : return p
+            
+    #interchanges = [ sampledisc() for i in xrange(N) ]
+    #interchanges = [ np.random.rand(2) for i in xrange(N) ]
+    interchanges = [
+                    (.14,.59), (.48,.6), (.4,.53), (.57,.43),
+                    #(.36,.27),
+                    (.37,.34),
+                    (.58,.23),
+                    (.11,.39),(.22,.15),
+                    (.12,.25),
+                    ]
+    interchanges = [ np.array(p) for p in interchanges ]
+    N = len(interchanges)
     
     """ construct roads from Delaunay adjacencies """
     import scipy.spatial as spatial
@@ -134,14 +151,14 @@ if __name__ == '__main__' :
         lims = mainax.axis()
         mainax.clear()
         SHOWMATCH( pltmatch, SSS, TTT, roadmap, pos=pos, ax=mainax )
-        mainax.set_aspect( 'equal' )
         
         global lims_flag
         if lims_flag :
             mainax.axis( lims )
         else :
+            mainax.set_aspect( 'equal' )
             lims_flag = True
-            
+        
         plt.draw()
         
     # set the callback
@@ -198,7 +215,7 @@ if __name__ == '__main__' :
     savebutton = Button(saveax, 'Save', color=axcolor, hovercolor='0.975')
     def saveplot(event) :
         extent = mainax.get_window_extent().transformed( fig.dpi_scale_trans.inverted() )
-        fig.savefig('figure.pdf', bbox_inches=extent )
+        fig.savefig('figure.svg', bbox_inches=extent )
         # Pad the saved area by 10% in the x-direction and 20% in the y-direction
         #fig.savefig('figure.pdf', bbox_inches=extent.expanded(1.1, 1.2) )
     savebutton.on_clicked(saveplot)
