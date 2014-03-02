@@ -16,225 +16,13 @@ import matplotlib.pyplot as plt
 
 
 
-
-
-
-
-
-
-
-
-
-
-def heightFunctionTex( S, T, ymin, ymax, z=None, steps=None ) :
-    if z is None :
-        zplus = 0
-    else :
-        zplus = z
-        
-    #str = "\\begin{tikzpicture}\n"
-    str = ''
-    
-    # compute necessary data
-    segment = roadbm.ONESEGMENT( S, T )
-    intervals = roadbm.INTERVALS( segment )
-    
-    # draw the axis
-    # horizontal
-    #str += "\\draw [->] (%f,0) -- (%f,0) node [right] {$\\coordvar$} ;\n" % ( YMIN, YMAX+.5 )
-    str += texhline( 0., ymin, ymax + .5, style='->' )
-    #
-    str += "\\draw [thick] (%(ymax)f,-.15) -- (%(ymax)f,.15) " % { 'ymax' : ymax }
-    str += "node [above right] {$\\roadlen_\\roadvar$} ;\n"
-    # vertical
-    fmin, fmax = min( intervals ), max( intervals )
-    hmin, hmax = min( fmin + zplus, 0 ), max( fmax + zplus, 0 )
-    hmin, hmax = np.floor( hmin ), np.ceil( hmax )
-    #np.floor( min( intervals ) )
-    #fmax = np.ceil( max( intervals ) )
-    data = { 'ymin' : ymin, 'fmin' : hmin-.25, 'fmax' : hmax+.25 }
-    str += "\\draw [->] (%(ymin)f,%(fmin)f) -- (%(ymin)f,%(fmax)f) " % data
-    str += "node [above] {$\\postcumarcs(y) = \\cumarcs(y) + \\numarcs$} ;\n"
-    # vertical ticks
-    for tick in np.arange(hmin,hmax+1,1) :
-        data = { 'tR' : ymin+.1, 'tL' : ymin-.1, 'tick' : tick }
-        str += "\\draw (%(tR)f,%(tick)d) -- (%(tL)f,%(tick)d) " % data
-        str += "node [left=5] {$%(tick)d$} ;\n" % data
-        
-    # place the X's and O's
-    str += texhline( zplus, ymin, ymax, style='dashed' )
-    for y, item in segment.items() :
-        phases = [ (item.P, '${\\color{red}\\times}$' ), (item.Q, '${\\color{blue}\\circ}$') ]
-        for Y, mark in phases :
-            for i in Y : str += "\\draw (%f,%f) node {%s} ;\n" % ( y, zplus, mark )
-            
-    # place the levels
-    arr = bintrees.RBTree()
-    for f, ranges in intervals.items() :
-        for a,b in ranges :
-            lb = a
-            if lb == '-' : lb = -np.inf
-            arr[lb] = ( (a,b), f )
-            
-    #print arr
-    #print [ v for v in arr.values() ]
-    
-    iter = arr.values()
-    if steps is not None : iter = itertools.islice( iter, steps )
-    for (a,b), f in iter :
-    #for f, ranges in intervals.items() :
-        h = f + zplus
-        label = ''
-        if a == '-' :
-            a = ymin
-            label = "node [%s] {$\\numarcs_\\roadvar$}"
-            if h >= 0 :       # zr >= 0?
-                label = label % "above"
-            else :
-                label = label % "below"
-        if b == '+' :
-            b = ymax
-            str += "\\draw (%f,%f) node [right] {$\\numarcs_\\roadvar + \\surplus_\\roadvar$} ;\n" % (b,h)
-                        
-        levelstr = "\\draw [thick] (%(yl)f,%(z)f) -- %(extra)s (%(yr)f,%(z)f) ;\n"
-        data = { 'yl' : a, 'yr' : b, 'z' : h, 'extra' : label }
-        str += levelstr % data
-        # place the shades
-        str += "\\path [fill=black,opacity=.2] (%(yl)f,0) rectangle (%(yr)f,%(z)f) ;\n" % data
-        
-    #str += "\\end{tikzpicture}\n"
-    return str
-
-
-
-
-def discreteCostTex( S, T, ymin, ymax, zmin, zmax, zplus=None ) :
-    segment = roadbm.ONESEGMENT( S, T )
-    meas = roadbm.MEASURE( segment, ymin, ymax )
-    obj = roadbm.OBJECTIVE( meas )
-    Cf = roadbm.costWrapper( obj )
-    
-    Z = range(zmin,zmax+1)
-    C = [ Cf(z) for z in Z ]
-    cmin, cmax = min(C), max(C)
-    
-    # obtain the 'star'
-    ZMIN, ZMAX = -max( meas ), -min( meas )
-    CC = [ ( Cf(z), z ) for z in range(ZMIN,ZMAX+1) ]
-    COPT, ZOPT = min(CC)
-    
-    
-    #str = "\\begin{tikzpicture}[x=1cm,y=.1cm]\n"
-    str = ''
-    # draw the axis
-    # horizontal
-    horz_level = np.floor(cmin)
-    data = { 'zmin' : zmin, 'zmax' : zmax, 'horz' : horz_level }
-    fmt = "\\draw [->] (%(zmin)d,%(horz)d) -- (%(zmax)f,%(horz)d) node [right] {$\\coordvar$} ;\n" 
-    str +=  fmt % data
-    # vertical
-    str += "\\draw [->] (0,%(cmin)f-1) -- (0,%(cmax)f) " % { 'cmin' : cmin, 'cmax' : cmax }
-    str += "node [above] {$\\cost(\\numarcs)$} ;\n"
-    # horizontal ticks
-    for tick in np.arange(zmin,zmax+1,1) :
-        data = { 'tick' : tick, 'horz' : horz_level }
-        str += "\\draw (%(tick)d,%(horz)f-.1) -- (%(tick)f,%(horz)f+.1) " % data
-        str += "node [below=5] {$%d$} ;\n" % tick
-        
-    # scatter
-    for z, c in zip( Z, C ) :
-        if z == ZOPT :
-            str += '\\draw [fill] (%f,%f) node {$\\star$} ;\n' % (z,c)       # {$\\circ$}'
-        else :
-            str += '\\draw [fill] (%f,%f) circle (.05cm) ;\n' % (z,c)       # {$\\circ$}'
-        
-    if zplus is not None and zmin <= zplus and zplus <= zmax :
-        str += '\\draw [] (%f,%f) circle (.2cm) ;\n' % (zplus,Cf(zplus))       # {$\\circ$}'
-        
-    #str += "\\end{tikzpicture}\n"
-    return str
-    
-    
-    
-
-
-
-
-def costFunctionTex( S, T, ymin, ymax, z=None ) :
-    if z is None :
-        zplus = 0
-    else :
-        zplus = z
-        
-    """ C to tikz """
-    segment = roadbm.ONESEGMENT( S, T )
-    meas = roadbm.MEASURE( segment, ymin, ymax )
-    obj = roadbm.OBJECTIVE( meas )
-    Cf = roadbm.costWrapper( obj )
-    
-    str = "\\begin{tikzpicture}[x=2cm,y=.1cm]\n"
-    
-    # draw the axis
-    ZMIN, ZMAX = -max( meas ), -min( meas )
-    WIDTH = ZMAX - ZMIN
-    
-    C = [ ( Cf(z), z ) for z in range(ZMIN,ZMAX+1) ]
-    CMIN, ZOPT = min(C)
-    CMAX, _ = max(C)
-    COPT = Cf(ZOPT)
-    
-    ZMIN = int( min( ZMIN, np.floor( zplus ) ) )
-    ZMAX = int( max( ZMAX, np.ceil( zplus ) ) )
-    
-    # horizontal
-    horz_level = np.floor(CMIN)
-    data = { 'zmin' : ZMIN, 'zmax' : ZMAX, 'horz' : horz_level }
-    fmt = "\\draw [->] (%(zmin)d,%(horz)d) -- (%(zmax)f,%(horz)d) node [right] {$\\coordvar$} ;\n" 
-    str +=  fmt % data
-    # vertical
-    str += "\\draw [->] (0,%(cmin)f-1) -- (0,%(cmax)f) " % { 'cmin' : CMIN, 'cmax' : CMAX }
-    str += "node [above] {$\\cost(\\numarcs)$} ;\n"
-    # horizontal ticks
-    for tick in np.arange(ZMIN,ZMAX+1,1) :
-        data = { 'tick' : tick, 'horz' : horz_level }
-        str += "\\draw (%(tick)d,%(horz)f-.1) -- (%(tick)f,%(horz)f+.1) " % data
-        str += "node [below=5] {$%d$} ;\n" % tick
-        
-    # draw dashed C curve
-    def drawpieces( ZZ, style ) :
-        str = ''
-        for z1,z2 in zip( ZZ[:-1], ZZ[1:] ) :
-            c1 = Cf(z1)
-            c2 = Cf(z2)
-            
-            data = { 'z1' : z1, 'z2' : z2, 'c1' : c1, 'c2' : c2, 'style' : style }
-            str += "\\draw [%(style)s] (%(z1)f,%(c1)f) -- (%(z2)f,%(c2)f) ;\n" % data
-            
-        return str
-            
-    # draw dashed C, all of it
-    str += drawpieces( range(ZMIN,ZMAX+1), 'dashed' )
-    # draw C so far
-    lastz = int( np.floor( zplus ) )
-    str += drawpieces( range(ZMIN,lastz+1) + [ zplus ], 'thick' )
-    
-    # add local vertical line
-    str += texvline( zplus, horz_level-1, max( CMAX, Cf(zplus) ) + 1, 'dashed' )
-    # add optimal
-    str += "\\draw node at (%(z)f,%(C)f) {$\\star$} ;\n" % { 'z' : ZOPT, 'C' : COPT }
-    
-    str += "\\end{tikzpicture}\n"
-    return str
-    
-
-
-
-
-
-
-
+""" convenience functions """
 
 def position( address, roadmap, pos, length_attr='length' ) :
+    """
+    get the Euclidean position of a street address,
+    given roadmap and dictionary of vertex positions
+    """
     if isinstance( address, ROAD.RoadAddress ) :
         road = address.road
         coord = address.coord
@@ -253,33 +41,57 @@ def position( address, roadmap, pos, length_attr='length' ) :
     return x + vec * coord / width
 
 def pointsToXY( points ) :
+    """ split a list of (x,y) coordinates into X and Y; usually for plotting """
     X = [ x for x,y in points ]
     Y = [ y for x,y in points ]
     return X, Y
 
 
+ZNODES = 1
+ZLABELS = 2
+ZEDGES = 3
+ZTRAILS = 4
+ZPOINTS = 5
+
+def drawRoadmap( roadmap, pos, ax=None, **kwargs ) :
+    if ax is None : ax = plt.gca()
+    
+    # draw the skeleton (undirected)
+    skeleton = nx.convert.convert_to_undirected( roadmap )
+    nx.draw_networkx_nodes( skeleton, pos, ax=ax, zorder=ZNODES )
+    nx.draw_networkx_edges( skeleton, pos=pos, ax=ax, zorder=ZEDGES, **kwargs )
+    
+    road_labels = { (u,v) : road + '\n'     # the endline is to raise the label
+                   for u,v,road in roadmap.edges_iter( keys=True ) }
+    nx.draw_networkx_edge_labels( skeleton, pos=pos, ax=ax, 
+                                  edge_labels=road_labels, zorder=ZLABELS )
 
 
-def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None ) :
-    # crucial labels
+
+
+
+def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
+               **kwargs ) :
+    """
+    visualize a matching on a roadmap:
+    imagine depositing one uniform trail of ink,
+    for each match in the matching,
+    on the shortest path between the endpoints of the match;
+    segments of the network more often covered will obtain more ink
+    """
+    # labels for three kinds of graph nodes
     VERTEX = 'v'
     POINT_IN_S = 'S'
     POINT_IN_T = 'T'
     
-    # plot the roadmap skeleton (undirected)
+    # draw the roadmap
     if ax is None : ax = plt.gca()
-    skeleton = nx.convert.convert_to_undirected( roadmap )
-    nx.draw_networkx_nodes( skeleton, pos, ax=ax )
-    nx.draw_networkx_edges( skeleton, pos=pos, ax=ax, edge_color='g', alpha=.15 )
+    options = { 'edge_color' : 'g', 'alpha' : .15 }     # lightly, though...
+    options.update( kwargs )                            # but let overrides
+    drawRoadmap( roadmap, pos, ax=ax, **options )
+    ax.set_aspect('equal')  # i just like equal aspect...
     
-    road_labels = { (u,v) : road
-                   for u,v,road in roadmap.edges_iter( keys=True ) }
-    nx.draw_networkx_edge_labels( skeleton, pos=pos, ax=ax, 
-                                  edge_labels=road_labels )
-    #nx.draw( skeleton, pos=pos, ax=ax, edge_color='g', alpha=.0 )
-    ax.set_aspect('equal')
-    
-    """ Now, want to get edges with proper thickness """
+    """ The hard part is getting the edges with proper thickness """
     # sort points onto segments
     segments = roadbm.SEGMENTS( S, T, roadmap )
     
@@ -334,24 +146,31 @@ def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None ) :
         # plot edges in graph with variable thickness? or some other visual cue
         for uu, vv, data in graph.edges_iter( data=True ) :
             score = data['score']
-            if score <= 0 : continue
+            if score <= 0 : continue    # would just waste effort
             
             posu = other_pos[uu]
             posv = other_pos[vv]
             
             xu, yu = posu
             xv, yv = posv
-            ax.plot( [xu,xv], [yu,yv], color='k', alpha=.6, linewidth=score )
+            options = { 'color' : 'k',
+                       'alpha' : .6,
+                        }
+            ax.plot( [xu,xv], [yu,yv], linewidth=score, solid_capstyle='butt',
+                     # butt style prevents awkward overlap of segments
+                     zorder=ZTRAILS,
+                     **options )
         
-    # plot the points on top, so visible
+    # plot the points on top, so visible; this isn't working
     # show S points in red
     positions = [ position(addr, roadmap, pos) for addr in S ]
+    options = { 'marker' : 'x' }
     X, Y = pointsToXY( positions )
-    ax.scatter( X, Y, color='r' )
+    ax.scatter( X, Y, color='r', zorder=ZPOINTS, **options )
     # show T points in blue
     positions = [ position(addr, roadmap, pos).tolist() for addr in T ]
     X, Y = pointsToXY( positions )
-    ax.scatter( X, Y, color='b' )
+    ax.scatter( X, Y, color='b', zorder=ZPOINTS, **options )
 
 
 
@@ -363,12 +182,9 @@ if __name__ == '__main__' :
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument( '--number', type=int, default=10 )
-    #parser.add_argument( '--Hout', type=str, default='Hout.tex' )
-    #parser.add_argument( '--Cout', type=str, default='Cout.tex' )
     args = parser.parse_args()
     
     N = args.number
-    #N = 10
     interchanges = [ np.random.rand(2) for i in xrange(N) ]
     
     import scipy.spatial as spatial
@@ -392,24 +208,18 @@ if __name__ == '__main__' :
     # and positions
     pos = { k : point for k, point in enumerate( tri.points ) }
     
-    # plot the network
-    #nx.draw(graph, pos=pos)
     
     
-    # requires bintrees, too.
-    import setiptah.roadgeometry.roadmap_basic as ROAD
-    import setiptah.roadbm.bm as roadbm
+    # now, draw two sets of points
     import setiptah.roadgeometry.probability as roadprob
-    
     uniform = roadprob.UniformDist( roadmap )
     
     
-    M = 500
-    addresses = [ uniform.sample() for i in xrange(M) ]
-    positions = [ position(addr, roadmap, pos) for addr in addresses ]
     
-    # <codecell>
     if False :
+        addresses = [ uniform.sample() for i in xrange(M) ]
+        positions = [ position(addr, roadmap, pos) for addr in addresses ]
+        
         X = [ x for x,y in positions ]
         Y = [ y for x,y in positions ]
         
@@ -418,10 +228,22 @@ if __name__ == '__main__' :
         ax.scatter(X,Y)
         ax.set_aspect('equal')
     
-    unpack = lambda addr : ( addr.road, addr.coord )
-    SS = [ unpack( uniform.sample() ) for i in xrange(M) ]
-    TT = [ unpack( uniform.sample() ) for i in xrange(M) ]
-    
-    match = roadbm.ROADSBIPARTITEMATCH( SS, TT, roadmap )
-    #match = [ (i,i) for i in xrange(M) ]
-    SHOWMATCH( match, SS, TT, roadmap, pos=pos )
+    if True :
+        # requires bintrees, too.
+        #import setiptah.roadgeometry.roadmap_basic as ROAD
+        
+        M = 500
+        unpack = lambda addr : ( addr.road, addr.coord )
+        SS = [ unpack( uniform.sample() ) for i in xrange(M) ]
+        TT = [ unpack( uniform.sample() ) for i in xrange(M) ]
+        
+        import setiptah.roadbm.bm as roadbm
+        match = roadbm.ROADSBIPARTITEMATCH( SS, TT, roadmap )
+        #match = [ (i,i) for i in xrange(M) ]
+        SHOWMATCH( match[:], SS, TT, roadmap, pos=pos )
+        
+        
+        
+        
+        
+        
