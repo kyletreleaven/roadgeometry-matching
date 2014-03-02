@@ -11,7 +11,7 @@ import networkx as nx
 import setiptah.roadgeometry.roadmap_basic as ROAD
 import setiptah.roadgeometry.astar_basic as ASTAR
 
-import setiptah.bpmatch.roadmaps as roadbm
+import setiptah.roadbm.bm as roadbm
 
 
 def texline( x1,y1, x2,y2, style=None ) :
