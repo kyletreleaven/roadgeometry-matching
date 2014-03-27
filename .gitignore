@@ -4,3 +4,9 @@
 # backups
 *.bak
 *~
+
+
+# images
+*.pdf
+*.png
+*.svg
