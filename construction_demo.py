@@ -166,25 +166,6 @@ def DISPLAY_STATE( I_graph, pos, active_node=None ) :
     
 
 
-def texline( p, q, style=None ) :
-    x1, y1 = p
-    x2, y2 = q
-    
-    data = { 'x1' : x1, 'x2' : x2, 'y1' : y1, 'y2' : y2 }
-    if style is None :
-        data['style'] = '->'
-    else :
-        data['style'] = '->,' + style
-        
-    return '\\draw [%(style)s] (%(x1).3f,%(y1).3f) -- (%(x2).3f,%(y2).3f) ;' % data
-
-def texcoordinate( label, point ) :
-    x, y = point
-    data = dict( label=label, x=x, y=y )
-    return '\\coordinate (%(label)s) at (%(x).3f,%(y).3f) ;' % data
-
-
-
 
 def texheader() :
     return """
@@ -217,13 +198,17 @@ def DISPLAY_STATE_TIKZ( I_graph, pos, active_node=None ) :
     node_indices = {}
     
     # categorize nodes
+    opt = {}
     k = 0
     for i, data in I_graph.nodes_iter( data=True ) :
         typei, labeli = i
         
         # map nodes to coordinates
         node_indices[i] = k
-        mystr += texcoordinate( 'coord%d' % k, pos[i] ) + '\n'
+        
+        x, y = pos[i]
+        opt.update( k=k, x=x, y=y )
+        mystr +=  '\\coordinate (coord%(k)d) at (%(x).3f,%(y).3f) ;\n' % opt
         k += 1
         
         if i == active_node :
@@ -250,6 +235,12 @@ def DISPLAY_STATE_TIKZ( I_graph, pos, active_node=None ) :
         data.update( k=node_indices[i] )
         mystr += '\\draw (coord%(k)d) circle (%(sz)f) ;\n' % data
         
+    # draw active
+    data = dict( sz=.005 )
+    for i in active :
+        data.update( k=node_indices[i] )
+        mystr += '\\fill [blue] (coord%(k)d) circle (%(sz)f) ;\n' % data
+        
     # draw other
     data = dict( sz=.002 )
     for i in other :
@@ -266,7 +257,7 @@ def DISPLAY_STATE_TIKZ( I_graph, pos, active_node=None ) :
         temp = data['T']
         if len(temp) > 0 : T_bags[i] = temp
         
-    fmt = '\\path (coord%(k)d) node [anchor=south,color=%(color)s] {\\footnotesize %(label)s} ;\n' 
+    fmt = '\\path (coord%(k)d) node [anchor=south,%(color)s] {\\footnotesize %(label)s} ;\n' 
     data = dict( offset=.001 )
     
     data.update( color='red' )
@@ -298,7 +289,7 @@ def DISPLAY_STATE_TIKZ( I_graph, pos, active_node=None ) :
             data.update( k1=node_indices[i], k2=node_indices[j] )
             mystr += fmt % data
         
-    return texheader() + mystr + texfooter()
+    return mystr
 
 
 
@@ -368,37 +359,44 @@ if __name__ == '__main__' :
     
     """ obtain an interval graph from the matching """
     I_graph, I_pos = matchvis.INTERVAL_GRAPH( opt_match, SS, TT, roadmap, pos )
-    # sometimes, there's still a cycle
-
-
+    # sometimes, there's still a cycle?
+    
+    
+    """ make tikz animation """
+    
+    def writeslide( k, mystr ) :
+        f = open( 'slides/slide%d.tex' % k, 'w' )
+        f.write( mystr )
+        f.close()
+        
+    f = open( 'slides/construction_animation.tex', 'w' )
+    
     SANITIZE( I_graph )
     INITIALIZE_BAGS( I_graph )
-
-
-    mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos )
-    outfile = open('output.tex', 'w' )
-    outfile.write( mystr )
-    outfile.close()
-
+    match = []
     
-    if False :
-        display = DISPLAY_STATE
+    
+    order = nx.topological_sort( I_graph )
+    k=0
+    for i in order :
+        #plt.figure()
+        mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos )
+        writeslide( k, mystr )
         
-        match = []
-        order = nx.topological_sort( I_graph )
+        f.write( '\\only<%(k)d>{ \\input{slides/slide%(k)d.tex} }\n' % { 'k' : k } )
         
-        for k, i in enumerate(order) :
-            if k >= 5 : break       # truncate early
-            
-            plt.figure()
-            display( I_graph, I_pos, active_node=i )
-            
-            #plt.savefig( 'I_graph%d.png' % k )
-            #plt.close()
-            
-            UPDATE( i, I_graph, match )
-            SANITIZE( I_graph )
+        UPDATE( i, I_graph, match )
+        SANITIZE( I_graph )
         
+        k += 1
+        
+    mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos )
+    writeslide( k, mystr )
+    
+    f.write( '\\only<%(k)d>{ \\input{slides/slide%(k)d}\n' % { 'k' : k } )
+    f.close()
+    
+    
     
     
     
