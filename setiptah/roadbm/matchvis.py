@@ -15,6 +15,22 @@ import setiptah.roadbm.bm as roadbm
 import matplotlib.pyplot as plt
 
 
+""" CONSTANTS """
+
+""" labels for three kinds of graph nodes """
+VERTEX = 'v'
+POINT_IN_S = 'S'
+POINT_IN_T = 'T'
+
+
+ZNODES = 1
+ZLABELS = 2
+ZEDGES = 3
+ZTRAILS = 4
+ZPOINTS = 5
+
+
+
 
 """ convenience functions """
 
@@ -47,16 +63,7 @@ def pointsToXY( points ) :
     return X, Y
 
 
-ZNODES = 1
-ZLABELS = 2
-ZEDGES = 3
-ZTRAILS = 4
-ZPOINTS = 5
 
-# labels for three kinds of graph nodes
-VERTEX = 'v'
-POINT_IN_S = 'S'
-POINT_IN_T = 'T'
 
 
 
@@ -169,10 +176,6 @@ def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
     on the shortest path between the endpoints of the match;
     segments of the network more often covered will obtain more ink
     """
-    # labels for three kinds of graph nodes
-    VERTEX = 'v'
-    POINT_IN_S = 'S'
-    POINT_IN_T = 'T'
     
     # draw the roadmap
     if ax is None : ax = plt.gca()
