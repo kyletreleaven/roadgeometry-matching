@@ -80,9 +80,10 @@ def UPDATE( i, I_graph, MATCH ) :
                 
         I_graph.remove_edge( i, j )
         
-        
-        
-        
+    I_graph.remove_node( i )
+    
+    
+    
 def DISPLAY_STATE( I_graph, pos, active_node=None ) :
     
     # get an axis
@@ -375,6 +376,7 @@ if __name__ == '__main__' :
     INITIALIZE_BAGS( I_graph )
     match = []
     
+    slide_fmt = '\\only<%(k)d>{ \\input{slides/slide%(k)d.tex} }\n'
     
     order = nx.topological_sort( I_graph )
     k=0
@@ -383,17 +385,16 @@ if __name__ == '__main__' :
         mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos )
         writeslide( k, mystr )
         
-        f.write( '\\only<%(k)d>{ \\input{slides/slide%(k)d.tex} }\n' % { 'k' : k } )
+        f.write( slide_fmt % { 'k' : k } )
         
         UPDATE( i, I_graph, match )
-        SANITIZE( I_graph )
         
         k += 1
         
     mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos )
     writeslide( k, mystr )
     
-    f.write( '\\only<%(k)d>{ \\input{slides/slide%(k)d}\n' % { 'k' : k } )
+    f.write( slide_fmt % { 'k' : k } )
     f.close()
     
     
