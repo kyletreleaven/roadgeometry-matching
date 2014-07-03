@@ -12,7 +12,7 @@ var svg = d3.select('body')
 //  - nodes are known by 'id', not by index in array.
 //  - reflexive edges are indicated on the node (as a bold black circle).
 //  - links are always source < target; edge directions are set by 'left' and 'right'.
-var nodes = [
+/* var nodes = [
     {id: 0, reflexive: false},
     {id: 1, reflexive: true },
     {id: 2, reflexive: false}
@@ -22,11 +22,16 @@ var nodes = [
     {source: nodes[0], target: nodes[1], left: false, right: true },
     {source: nodes[1], target: nodes[2], left: false, right: true }
   ];
+//*/
+
+var nodes = [], lastNodeId = 0, links = [] ;
 
 // init D3 force layout
 var force = d3.layout.force()
     .nodes(nodes)
     .links(links)
+    //.nodes()
+    //.links()
     .size([width, height])
     .linkDistance(150)
     .charge(-500)
@@ -92,12 +97,15 @@ function tick() {
         sourceY = d.source.y + (sourcePadding * normY),
         targetX = d.target.x - (targetPadding * normX),
         targetY = d.target.y - (targetPadding * normY);
+    //return 'M' + d.source.x + ',' + d.source.y + 'L' + d.target.x + ',' + d.target.y ;
     return 'M' + sourceX + ',' + sourceY + 'L' + targetX + ',' + targetY;
   });
 
+  ///*
   circle.attr('transform', function(d) {
     return 'translate(' + d.x + ',' + d.y + ')';
   });
+  //*/
 }
 
 // update graph (called when needed)
@@ -235,7 +243,13 @@ function restart() {
   circle.exit().remove();
 
   // set the graph in motion
-  force.start();
+  if (false) {
+	  force.start() ;
+  } else {
+	  // if we do need incite force, then
+	  // need to call tick at least once to update the svg!
+	  tick() ;
+  }
 }
 
 function mousedown() {
@@ -369,3 +383,10 @@ d3.select(window)
   .on('keydown', keydown)
   .on('keyup', keyup);
 restart();
+
+
+
+
+
+
+
