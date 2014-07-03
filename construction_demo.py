@@ -50,19 +50,54 @@ def INITIALIZE_BAGS( I_graph ) :
             
         elif typei == matchvis.POINT_IN_T :
             data['T'].append( labeli )
-            #T_bags[i].append( labeli )
             
         else :
             raise Exception('unrecognized node type')
 
 
-def UPDATE( i, I_graph, MATCH ) :
+def UPDATE_EDGE( i, j, I_graph, MATCH ) :
+    src_data = I_graph.node[i]
+    src_S_bag = src_data['S']
+    
+    edge_data = I_graph.get_edge_data( i, j )
+    score = edge_data['score']
+    
+    dst_data = I_graph.node[j]
+    dst_S_bag = dst_data['S']
+    dst_T_bag = dst_data['T']
+    
+    cancel = min( score, len( dst_T_bag ) )
+    shift = score - cancel
+    
+    for k in xrange(cancel) :
+        s = src_S_bag.pop(0)
+        t = dst_T_bag.pop(0)
+        MATCH.append( (s,t) )
+    
+    temp, src_S_bag[:] = src_S_bag[:shift], src_S_bag[shift:]
+    dst_S_bag[:] = temp + dst_S_bag[:]
+    
+    I_graph.remove_edge( i, j )
+    
+    if len( src_S_bag ) <= 0 : I_graph.remove_node( i )
+    if len( dst_S_bag ) + len( dst_T_bag ) <= 0 : I_graph.remove_node( j )
+    #if I_graph.out_degree( i ) <= 0 : I_graph.remove_node( i )
+
+
+def UPDATE_NODE( i, I_graph, MATCH ) :
     """ node must have *no* in-degree """
     
     src_data = I_graph.node[i]
     src_S_bag = src_data['S']
     
-    for _, j, edge_data in I_graph.out_edges_iter( i, data=True ) :
+    if I_graph.out_degree( i ) <= 0 :
+        I_graph.remove_node( i )
+        
+    else :
+        # just process one edge
+        iter = I_graph.out_edges_iter( i, data=True )
+        _, j, edge_data = iter.next()
+        
         score = edge_data['score']
         
         dst_data = I_graph.node[j]
@@ -80,10 +115,9 @@ def UPDATE( i, I_graph, MATCH ) :
                 
         I_graph.remove_edge( i, j )
         
-    I_graph.remove_node( i )
-    
-    
-    
+        
+        
+        
 def DISPLAY_STATE( I_graph, pos, active_node=None ) :
     
     # get an axis
@@ -184,9 +218,12 @@ def texfooter() :
 """
 
 
-def DISPLAY_STATE_TIKZ( I_graph, pos, active_node=None ) :
+def DISPLAY_STATE_TIKZ( I_graph, pos, MATCH=None, active_node=None ) :
     
     mystr = ''
+    
+    # draw a bounding box
+    mystr += '\\draw (0,.1) rectangle (.7,.7) ;\n'
     
     # populate node labels, and...
     # initialize S and T queues on the interval graph
@@ -290,6 +327,16 @@ def DISPLAY_STATE_TIKZ( I_graph, pos, active_node=None ) :
             data.update( k1=node_indices[i], k2=node_indices[j] )
             mystr += fmt % data
         
+    if MATCH is not None :
+        # display the matching-so-far
+        match_fmt = '({\\color{red}%d},{\\color{blue}%d}), '
+        match_strings = [ match_fmt % (s,t) for s, t in MATCH ]
+        
+        cat = lambda s1, s2 : s1 + s2
+        match_tex = reduce( cat, [ '[' ] + match_strings + [ ']' ] )
+        
+        mystr += '\\node at (.35,0) {%s} ;\n' % match_tex
+    
     return mystr
 
 
@@ -351,8 +398,25 @@ if __name__ == '__main__' :
     uniform = roadprob.UniformDist( roadmap )
     unpack = lambda addr : ( addr.road, addr.coord )
     
-    SS = [ unpack( uniform.sample() ) for i in xrange(M) ]
-    TT = [ unpack( uniform.sample() ) for i in xrange(M) ]
+    if False :
+        SS = [ unpack( uniform.sample() ) for i in xrange(M) ]
+        TT = [ unpack( uniform.sample() ) for i in xrange(M) ]
+    
+    else :
+        SS = [  ('road 0',.15),
+                ('road 1',.1), ('road 1',.15),
+                ('road 3',.05), ('road 3',.075),
+                ('road 8',.05),
+                ('road 10',.05),
+              ]
+        
+        TT = [  ('road 6',.1),('road 6',.15),
+                ('road 8',.1),
+                ('road 10',.1), ('road 10',.15),
+                ('road 12',.1),
+                ('road 13',.1),
+              ]
+    
     
     """ obtain the optimal matching """
     import setiptah.roadbm.bm as roadbm
@@ -379,19 +443,20 @@ if __name__ == '__main__' :
     slide_fmt = '\\only<%(k)d>{ \\input{slides/slide%(k)d.tex} }\n'
     
     order = nx.topological_sort( I_graph )
-    k=0
-    for i in order :
-        #plt.figure()
-        mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos )
+    edges = []
+    for i in order : edges.extend( I_graph.out_edges_iter(i) )
+    k=1
+    for i,j in edges :
+        mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos, match )
         writeslide( k, mystr )
         
         f.write( slide_fmt % { 'k' : k } )
         
-        UPDATE( i, I_graph, match )
+        UPDATE_EDGE( i, j, I_graph, match )
         
         k += 1
         
-    mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos )
+    mystr = DISPLAY_STATE_TIKZ( I_graph, I_pos, match )
     writeslide( k, mystr )
     
     f.write( slide_fmt % { 'k' : k } )
