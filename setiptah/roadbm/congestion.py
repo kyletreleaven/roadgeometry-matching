@@ -10,6 +10,120 @@ import setiptah.roadgeometry.roadmap_basic as ROAD
 import scipy.signal as sig
 
 
+
+
+
+
+def BIPARTITEMATCH_ROADS_CONGESTED( S, T, roadmap, congestion_dict ) :
+    MATCH = []
+    
+    segment_dict = roadbm.SEGMENTS( S, T, roadmap )
+    surplus_dict = dict()
+    objective_dict = dict()
+    
+    for road, segment in segment_dict.iteritems() :
+        match = roadbm.PREMATCH( segment )
+        MATCH.extend( match )
+        
+        surplus_dict[road] = roadbm.SURPLUS( segment )
+        
+        roadlen = roadbm.get_road_data( road, roadnet ).get( 'length', 1 )
+        measure = roadbm.MEASURE( segment, roadlen )
+        
+        objective_dict[road] = CONGESTION_OBJECTIVE( measure, congestion_dict[road] )
+        #objective_dict[road] = objective
+        
+        
+    from nxflow.capscaling import SOLVER
+    try :
+        assist = SOLVER( roadmap, surplus_dict, objective_dict )
+    except Exception as ex :
+        ex.segs = segment_dict
+        ex.surp = surplus_dict
+        ex.obj = objective_dict
+        
+        raise ex
+    
+    if False :        # activate for debug
+        imbalance = roadbm.CHECKFLOW( assist, roadmap, surplus_dict )
+    else :
+        imbalance = []
+        
+    try :
+        assert len( imbalance ) <= 0
+    except Exception as ex :
+        ex.imbal = imbalance
+        raise ex
+    
+    topograph = roadbm.TOPOGRAPH( segment_dict, assist, roadmap )
+    
+    try :
+        match = roadbm.TRAVERSE( topograph )
+    except Exception as ex :
+        ex.assist = assist
+        ex.topograph = topograph
+        raise ex
+    
+    MATCH.extend( match )
+    return MATCH
+
+
+
+
+def CONGESTION_OBJECTIVE( measure, rho ) :
+    
+    """ prepare convolution """
+    a = measure.min_key()
+    b = measure.max_key()
+    
+    # serialize
+    if True :
+        W = [ w for k, w in measure.items() ]
+        W.reverse()
+        
+    else :
+        W = np.zeros(b-a + 1 )
+        for k, w in measure.items() :
+            W[-k] = w   # reverse here, and account for the circular shift!
+    
+    """
+        need C(z) for z \in [-N,N] ??? is this true? drat!
+        so, W_{n-z} = 0 for all n < a - N, and for all n > b + N
+    """
+    # relevant range
+    A, B = a - N, b + N
+    L = B-A + 1
+    
+    alpha = {}
+    for n in xrange(A,B+1) :
+        alpha[n] = abs(n) * rho(n)
+
+    # prepare sequence form 
+    if False :
+        # w/ circular shift?
+        alpha_seq = np.zeros(L)
+        for n in xrange(A,B+1) : alpha_seq[n] = alpha[n]
+        
+        #for n in xrange(B+1) : alpha_seq[n] = alpha[n]
+        #for n in xrange(A,0) :
+            #alpha_seq[ B+1 + n-A ] = alpha[n]
+            
+    else :
+        alpha_seq = [ alpha[k] for k in xrange(A,B+1) ]
+    
+    # efficient, FFT method
+    C_fft = sig.fftconvolve( W, alpha_seq )
+    C_fix = C_fft[b-A-N:b-A+N+1]
+
+    # return some wrapper for C_fix
+    
+
+
+
+
+
+
+
 if __name__== '__main__' :
     
     import matplotlib.pyplot as plt
@@ -53,7 +167,6 @@ if __name__== '__main__' :
         #objective_dict[road] = objective
     """ measure_dict now contains sequence of W_n """
 
-    
     
     
     """ prepare convolution """
