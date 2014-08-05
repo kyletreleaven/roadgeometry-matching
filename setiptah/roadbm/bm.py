@@ -116,7 +116,7 @@ def CHECKFLOW( flow, roadnet, surplus ) :
 
 
 def WRITEOBJECTIVES( P, Q, roadnet ) :
-    MATCH = []
+    MATCH = []      # although, we just toss this...
     
     segment_dict = SEGMENTS( P, Q, roadnet )
     surplus_dict = dict()
@@ -134,6 +134,8 @@ def WRITEOBJECTIVES( P, Q, roadnet ) :
         #objective_dict[road] = objective
         
     return objective_dict
+
+
 
 
 """ Algorithm Utilities """
@@ -424,7 +426,9 @@ class costWrapper :
         self.lines = lines
         
     def __call__(self, z ) :
-        """ this is an O(log n) query function, can be reduced to O(1) by random access after floor operation """
+        """
+        this is an O(log n) query function (although, probably an O(1) expected hash map), 
+        can be reduced to O(1) by random access after floor operation """
         _, line = self.lines.floor_item( z )
         return line( z )
 
