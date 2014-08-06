@@ -53,6 +53,7 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
     segment_dict = SEGMENTS( P, Q, roadnet )
     surplus_dict = dict()
     objective_dict = dict()
+    measure_dict = dict()
     
     for road, segment in segment_dict.iteritems() :
         match = PREMATCH( segment )
@@ -62,18 +63,22 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
         
         roadlen = get_road_data( road, roadnet ).get( 'length', 1 )
         measure = MEASURE( segment, roadlen )
-        objective_dict[road] = OBJECTIVE( measure )
+        measure_dict[road] = measure
+        #objective_dict[road] = OBJECTIVE( measure )
         #objective_dict[road] = objective
         
-    from nxflow.capscaling import SOLVER
-    try :
-        assist = SOLVER( roadnet, surplus_dict, objective_dict )
-    except Exception as ex :
-        ex.segs = segment_dict
-        ex.surp = surplus_dict
-        ex.obj = objective_dict
-        
-        raise ex
+    #from nxflow.capscaling import SOLVER
+    if True :
+        assist = SOLVER( roadnet, surplus_dict, measure_dict )
+    else :
+        try :
+            assist = SOLVER( roadnet, surplus_dict, objective_dict )
+        except Exception as ex :
+            ex.segs = segment_dict
+            ex.surp = surplus_dict
+            ex.obj = objective_dict
+            
+            raise ex
     
     if False :		# activate for debug
         imbalance = CHECKFLOW( assist, roadnet, surplus_dict )
@@ -103,8 +108,12 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
 
 
 
-""" Phase I: Transcription """
 
+""" ALGORITHM SUB-ROUTINES """
+
+
+
+""" Phase I: Transcription """
 
 
 def WRITEOBJECTIVES( P, Q, roadnet ) :
@@ -181,62 +190,6 @@ def PREMATCH( segment ) :
 
 
 
-
-""" Phase II: Solution/Verification """
-
-
-def CHECKFLOW( flow, roadnet, surplus ) :
-    balance = { u : 0. for u in roadnet.nodes_iter() }
-    for i, j, road in roadnet.edges_iter( keys=True ) :
-        balance[i] -= flow.get( road, 0. )
-        balance[j] += flow.get( road, 0. ) + surplus.get( road, 0. )
-        
-    return { k:v for k,v in balance.iteritems() if v != 0. }
-
-
-
-
-
-""" Algorithm Utilities """
-
-def ensure_road( road, data ) :
-    curr = data.setdefault( road )
-    if curr is None : data[road] = bintrees.RBTree()
-    return data[road]
-
-class TwoQueues() :
-    def __init__(self) :
-        self.P = []
-        self.Q = []
-        
-    def __repr__(self) :
-        return '<P:%s,Q:%s>' % ( repr(self.P), repr(self.Q) )
-
-def ensure_key( key, tree ) :
-    curr = tree.set_default( key )
-    if curr is None : tree[key] = TwoQueues()
-    return tree[key]
-
-class LineData :
-    def __init__(self, m,b) :
-        self.slope = m
-        self.offset = b
-        
-    def __call__(self, x ) :
-        return self.slope * x + self.offset
-    
-    def __repr__(self) :
-        return '<%f z + %f>' % ( self.slope, self.offset )
-
-class terminal :    # simple node type for TRAVERSE
-    def __init__(self, q ) :
-        self.q = q
-
-
-
-""" ALGORITHM SUB-ROUTINES """
-    
-
 def SURPLUS( segment ) :
     deltas = [ len( q.P ) - len( q.Q ) for y,q in segment.iter_items() ]
     return sum( deltas )
@@ -271,40 +224,57 @@ def MEASURE( segment, length, rbound=None ) :
 
 
 
-def INTERVALS( segment ) :      # very similar routine, used to build the walk graph
-    res = dict()
-    
-    posts = [ '-' ] + [ y for y,q in segment.iter_items() ] + [ '+' ]
-    intervals = zip( posts[:-1], posts[1:] )
-    
-    deltas = [0] + [ len(q.P)-len(q.Q) for y,q in segment.iter_items() ]
-    F = np.cumsum( deltas )
-    
-    for I, f in zip( intervals, F ) :
-        res.setdefault( f, [] )
-        res[f].append( I )
-        
-    return res
+
+""" Phase II: Transformation/Solution/Verification """
+
+from setiptah.basic_graph.mygraph import mygraph
+from setiptah.nxopt.cvxcostflow import MinConvexCostFlow
 
 
-def EDGES( segment ) :      # very similar routine, used to build the walk graph
-    edges = dict()
-    
-    posts = [ '-' ] + [ q for y,q in segment.iter_items() ] + [ '+' ]
-    posts = [ terminal(q) for q in posts ]
-    intervals = zip( posts[:-1], posts[1:] )
-    
-    deltas = [0] + [ len(q.P)-len(q.Q) for y,q in segment.iter_items() ]
-    F = np.cumsum( deltas )
-    
-    for I, f in zip( intervals, F ) :
-        edges.setdefault( f, [] )
-        edges[f].append( I )
+
+class costWrapper :
+    """
+    wrap an RBTree arrangement of LineData()s to obtain a piece-wise linear callable function 
+    """
+    def __init__(self, lines ) :
+        self.lines = lines
         
-    return edges
+    def __call__(self, z ) :
+        """
+        this is an O(log n) query function (although, probably an O(1) expected hash map), 
+        can be reduced to O(1) by random access after floor operation """
+        _, line = self.lines.floor_item( z )
+        return line( z )
+
+class negativeWrapper :
+    """ a simple callable wrapper to create f(-x) from f(x) """
+    def __init__(self, func ) :
+        self.func = func
+        
+    def __call__(self, z ) :
+        return self.func( -z )
+
+class offsetWrapper :
+    """ a simple callable wrapper to create f(x+x0) from f(x) """
+    def __init__(self, func, shift ) :
+        self.func = func
+        self.shift = shift
+        
+    def __call__(self, z ) :
+        return self.func( z + self.shift )
+
+
+
+
+
 
 
 def OBJECTIVE( measure ) :
+    """
+    produces the objective LineData()s RBTree arrangement
+    given the dictionary of interval measures;
+    N levels => N+1 LineData()s (verify?)
+    """
     def sweep( x ) :
         Xminus = np.cumsum( x )
         total = Xminus[-1]
@@ -327,12 +297,128 @@ def OBJECTIVE( measure ) :
     return Cz
 
 
+def OBJECTIVE_FUNC( measure ) :
+    """ produces the convex objective function assoc. with a set of interval measures """
+    return costWrapper( OBJECTIVE(measure) )
+
+
+
+
+def SOLVER( roadnet, surplus, measure_dict ) :
+    network = mygraph()
+    capacity = {}
+    supply = { i : 0. for i in roadnet.nodes() }
+    cost = {}   # functions
+    #
+    oneway_offset = {}  # for one-way roads
+    
+    for i,j, road, data in roadnet.edges_iter( keys=True, data=True ) :
+        supply[j] += surplus[road]
+        measure = measure_dict[road]
+        
+        fobj = OBJECTIVE_FUNC( measure )
+        
+        # edge construction
+        if data.get( 'oneway', False ) :
+            # if one-way road
+            
+            # record minimum allowable flow on road
+            zmin = -measure.min_key()   # i.e., z + min key of measure >= 0 
+            oneway_offset[road] = zmin
+            # create a 'bias point'
+            supply[i] -= zmin
+            supply[j] += zmin
+            
+            # shift and record the cost function on only a forward edge
+            fobj_offset = offsetWrapper( fobj, zmin )
+            network.add_edge( road, i, j )
+            cost[ road ] = fobj_offset
+            
+        else :
+            # if bi-directional road... instantiate pair of edges
+            #cc = roadbm.costWrapper( cost_data )
+            n_fobj = negativeWrapper( fobj )     # won't have to worry about the C(0) offset
+            
+            network.add_edge( (road,+1), i, j )
+            cost[ (road,+1) ] = fobj
+            #
+            network.add_edge( (road,-1), j, i )
+            cost[ (road,-1) ] = n_fobj
+
+    """
+    compute the width U of the first cvxcost algorithm phase;
+    a bound on the optimal flow on any edge; 
+    Logic: there cannot be more flow on a given road in the graph
+    than there are total intervals between levels in the network
+    (Proof Sketch):
+    1. U <= M ;
+    2. (Prove...) Given any matching instance which
+        induces a measure network w/ U' total intervals between levels,
+        a new matching instance realizing the same measure network can be constructed
+        on just U' points in each set
+    """
+    # safe-ish...
+    #U = sum([ len(m) + 1 for m in measure_dict.values() ])
+    # below is almost certainly just as good a bound, but I'm a scaredy-cat
+    U = sum([ len(m) - 1 for m in measure_dict.values() ])
+    
+    f = MinConvexCostFlow( network, {}, supply, cost, U )
+    
+    flow = {}
+    for i, j, road in roadnet.edges_iter( keys=True ) :
+        if road in oneway_offset :
+            flow[road] = f[road] + oneway_offset[road]
+        else :
+            flow[road] = f[(road,+1)] - f[(road,-1)]
+            
+        flow[road] = int( flow[road] )
+    
+    #print flow
+    return flow
+
+
+
+
+
+
+
+
+
+
+
+
+
+def CHECKFLOW( flow, roadnet, surplus ) :
+    balance = { u : 0. for u in roadnet.nodes_iter() }
+    for i, j, road in roadnet.edges_iter( keys=True ) :
+        balance[i] -= flow.get( road, 0. )
+        balance[j] += flow.get( road, 0. ) + surplus.get( road, 0. )
+        
+    return { k:v for k,v in balance.iteritems() if v != 0. }
+
 
 
 
 
 
 """ Phase III: Matching Construction """
+
+
+def EDGES( segment ) :      # very similar routine, used to build the walk graph
+    edges = dict()
+    
+    posts = [ '-' ] + [ q for y,q in segment.iter_items() ] + [ '+' ]
+    posts = [ terminal(q) for q in posts ]
+    intervals = zip( posts[:-1], posts[1:] )
+    
+    deltas = [0] + [ len(q.P)-len(q.Q) for y,q in segment.iter_items() ]
+    F = np.cumsum( deltas )
+    
+    for I, f in zip( intervals, F ) :
+        edges.setdefault( f, [] )
+        edges[f].append( I )
+        
+    return edges
 
 
 
@@ -420,6 +506,75 @@ def TRAVERSE( topograph ) :
 
 
 
+
+
+
+
+""" Misc. Algorithm Utilities """
+
+def ensure_road( road, data ) :
+    curr = data.setdefault( road )
+    if curr is None : data[road] = bintrees.RBTree()
+    return data[road]
+
+class TwoQueues() :
+    def __init__(self) :
+        self.P = []
+        self.Q = []
+        
+    def __repr__(self) :
+        return '<P:%s,Q:%s>' % ( repr(self.P), repr(self.Q) )
+
+def ensure_key( key, tree ) :
+    curr = tree.set_default( key )
+    if curr is None : tree[key] = TwoQueues()
+    return tree[key]
+
+class LineData :
+    def __init__(self, m,b) :
+        self.slope = m
+        self.offset = b
+        
+    def __call__(self, x ) :
+        return self.slope * x + self.offset
+    
+    def __repr__(self) :
+        return '<%f z + %f>' % ( self.slope, self.offset )
+
+class terminal :    # simple node type for TRAVERSE
+    def __init__(self, q ) :
+        self.q = q
+
+
+
+
+def INTERVALS( segment ) :      # very similar routine, used to build the walk graph
+    res = dict()
+    
+    posts = [ '-' ] + [ y for y,q in segment.iter_items() ] + [ '+' ]
+    intervals = zip( posts[:-1], posts[1:] )
+    
+    deltas = [0] + [ len(q.P)-len(q.Q) for y,q in segment.iter_items() ]
+    F = np.cumsum( deltas )
+    
+    for I, f in zip( intervals, F ) :
+        res.setdefault( f, [] )
+        res[f].append( I )
+        
+    return res
+
+
+
+
+
+
+
+
+
+
+
+
+
 """ MATCH TESTING Utilities """
 
 def MATCHCOSTS( match, P, Q, roadnet ) :
@@ -437,18 +592,6 @@ def ROADMATCHCOST( match, P, Q, roadnet ) :
 
 
 
-
-
-class costWrapper :
-    def __init__(self, lines ) :
-        self.lines = lines
-        
-    def __call__(self, z ) :
-        """
-        this is an O(log n) query function (although, probably an O(1) expected hash map), 
-        can be reduced to O(1) by random access after floor operation """
-        _, line = self.lines.floor_item( z )
-        return line( z )
 
 
 
@@ -470,56 +613,57 @@ def drawCBounds( ZZ, Ctree, ax=None ) :
 
 
 
-
-
-""" convenient sampling utility for the unit test below, might as well be a package-export, though """
-
-class WeightedSet :
-    def __init__(self, weight_dict ) :
-        """
-        keys are targets, values are weights; needn't sum to 1
-        doesn't check for repeats
-        """
-        targets = weight_dict.keys()
-        weights = weight_dict.values()
-        scores = np.cumsum( np.array( weights ) )
-        
-        self._hiscore = scores[-1]
-        self._tree = bintrees.RBTree()
-        for target, score in zip( targets, scores ) :
-            self._tree.insert( score, target )
-            
-    def sample(self) :
-        z = self._hiscore * np.random.rand()
-        _, res = self._tree.ceiling_item( z )
-        return res
-    
-    
-class UniformDist :
-    def __init__(self, roadnet=None, length=None ) :
-        if roadnet is not None :
-            self.set_roadnet( roadnet, length )
-        
-    def set_roadnet(self, roadnet, length=None ) :
-        if length is None : length = 'length'
-        
-        weight_dict = dict()
-        for _,__, road, data in roadnet.edges_iter( keys=True, data=True ) :
-            weight_dict[road] = data.get( length, 1 )
-            
-        self.roadnet = roadnet
-        self.road_sampler = WeightedSet( weight_dict )
-        
-    def sample(self) :
-        road = self.road_sampler.sample()
-        L = get_road_data( road, self.roadnet ).get( 'length', 1 )
-        y = L * np.random.rand()
-        return (road,y)
-    
-    
     
     
 if __name__ == '__main__' :
+
+    """ convenient sampling utility for the unit test below, might as well be a package-export, though """
+
+    class WeightedSet :
+        def __init__(self, weight_dict ) :
+            """
+            keys are targets, values are weights; needn't sum to 1
+            doesn't check for repeats
+            """
+            targets = weight_dict.keys()
+            weights = weight_dict.values()
+            scores = np.cumsum( np.array( weights ) )
+            
+            self._hiscore = scores[-1]
+            self._tree = bintrees.RBTree()
+            for target, score in zip( targets, scores ) :
+                self._tree.insert( score, target )
+                
+        def sample(self) :
+            z = self._hiscore * np.random.rand()
+            _, res = self._tree.ceiling_item( z )
+            return res
+        
+        
+    class UniformDist :
+        def __init__(self, roadnet=None, length=None ) :
+            if roadnet is not None :
+                self.set_roadnet( roadnet, length )
+            
+        def set_roadnet(self, roadnet, length=None ) :
+            if length is None : length = 'length'
+            
+            weight_dict = dict()
+            for _,__, road, data in roadnet.edges_iter( keys=True, data=True ) :
+                weight_dict[road] = data.get( length, 1 )
+                
+            self.roadnet = roadnet
+            self.road_sampler = WeightedSet( weight_dict )
+            
+        def sample(self) :
+            road = self.road_sampler.sample()
+            L = get_road_data( road, self.roadnet ).get( 'length', 1 )
+            y = L * np.random.rand()
+            return (road,y)
+        
+        
+
+    
     VISUAL = False
     if VISUAL :
         import matplotlib.pyplot as plt
