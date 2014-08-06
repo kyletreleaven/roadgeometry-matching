@@ -102,16 +102,19 @@ class ALGGLOBAL :
 
 def MinConvexCostFlow( network, capacity, supply, cost, U, epsilon=None ) :
     """
-    see "Fragile" version;
-    this wrapper adds robustness:
-    pre-processes to ensure strong connectivity of *any* Delta-residual graph;
-    edge weights should be prohibitively expensive
+    network is a mygraph() --- supports non-negative flow on digraph edges 
+    capacity is a dict() : road -> real, non-neg flow capacity
+    supply is a dict() : vertex -> real vertex supply; assumed conservative supply, i.e., sums to 0
+    cost is a dict() : road -> convex cost function assoc. w/ road
+    #
+    U is the width of the first phase of the capacity-scaling algorithm
+    epsilon is final phase width: eps=1 (default) yields integer optimal solution
     """
     
-    # create a robust instance
+    # create a *robust* instance, to ensure strong connectivity of *any* Delta-residual graph
     network_aug, capacity_rename, cost_aug = MCCFRobustInstance( network, capacity, supply, cost, U )
     
-    # run the "fragile" version
+    # run the "fragile" implementation
     flow = FragileMCCF( network_aug, capacity_rename, supply, cost_aug, U, epsilon )
     
     # prepare output --- perhaps do some feasibility checking in the future
@@ -120,6 +123,10 @@ def MinConvexCostFlow( network, capacity, supply, cost, U, epsilon=None ) :
 
 
 def MCCFRobustInstance( network, capacity, supply, cost, U ) :
+    """
+    this wrapper transforms any convex cost flow instance into an equivalent one for which
+    every Delta-residual graph is strongly connected
+    """
     network_aug = mygraph()
     capacity_rename = {}
     cost_aug = {}
