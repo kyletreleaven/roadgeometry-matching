@@ -9,23 +9,15 @@ import networkx as nx
 
 """ my dependencies """
 import setiptah.roadgeometry.roadmap_basic as ROAD
-if False :       # not sure which way is right...
-    RoadAddress = ROAD.RoadAddress
-else :
-    from setiptah.roadgeometry.roadmap_basic import RoadAddress
+from setiptah.roadgeometry.roadmap_basic import RoadAddress, get_road_data
+
+import setiptah.roadgeometry.probability as roadprob
 
 import setiptah.roadgeometry.astar_basic as ASTAR
 
 
 
 # to construct the optimization problem
-
-
-""" utility """
-
-def get_road_data( road, roadnet ) :
-    for _,__,key, data in roadnet.edges_iter( keys=True, data=True ) :
-        if key == road : return data
 
 
 
@@ -617,50 +609,6 @@ def drawCBounds( ZZ, Ctree, ax=None ) :
     
 if __name__ == '__main__' :
 
-    """ convenient sampling utility for the unit test below, might as well be a package-export, though """
-
-    class WeightedSet :
-        def __init__(self, weight_dict ) :
-            """
-            keys are targets, values are weights; needn't sum to 1
-            doesn't check for repeats
-            """
-            targets = weight_dict.keys()
-            weights = weight_dict.values()
-            scores = np.cumsum( np.array( weights ) )
-            
-            self._hiscore = scores[-1]
-            self._tree = bintrees.RBTree()
-            for target, score in zip( targets, scores ) :
-                self._tree.insert( score, target )
-                
-        def sample(self) :
-            z = self._hiscore * np.random.rand()
-            _, res = self._tree.ceiling_item( z )
-            return res
-        
-        
-    class UniformDist :
-        def __init__(self, roadnet=None, length=None ) :
-            if roadnet is not None :
-                self.set_roadnet( roadnet, length )
-            
-        def set_roadnet(self, roadnet, length=None ) :
-            if length is None : length = 'length'
-            
-            weight_dict = dict()
-            for _,__, road, data in roadnet.edges_iter( keys=True, data=True ) :
-                weight_dict[road] = data.get( length, 1 )
-                
-            self.roadnet = roadnet
-            self.road_sampler = WeightedSet( weight_dict )
-            
-        def sample(self) :
-            road = self.road_sampler.sample()
-            L = get_road_data( road, self.roadnet ).get( 'length', 1 )
-            y = L * np.random.rand()
-            return (road,y)
-        
         
 
     
@@ -683,7 +631,7 @@ if __name__ == '__main__' :
     if True :
         roadnet.add_edge( 0,4, 'dangler', length=1. )
     
-    sampler = UniformDist( roadnet )
+    sampler = roadprob.UniformDist( roadnet )
     
     NUMPOINT = 50
     ZZ = np.linspace(-NUMPOINT,NUMPOINT,1000)
