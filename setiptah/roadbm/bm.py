@@ -103,15 +103,7 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
 
 
 
-def CHECKFLOW( flow, roadnet, surplus ) :
-    balance = { u : 0. for u in roadnet.nodes_iter() }
-    for i, j, road in roadnet.edges_iter( keys=True ) :
-        balance[i] -= flow.get( road, 0. )
-        balance[j] += flow.get( road, 0. ) + surplus.get( road, 0. )
-        
-    return { k:v for k,v in balance.iteritems() if v != 0. }
-
-
+""" Phase I: Transcription """
 
 
 
@@ -134,6 +126,73 @@ def WRITEOBJECTIVES( P, Q, roadnet ) :
         #objective_dict[road] = objective
         
     return objective_dict
+
+
+
+
+def SEGMENTS( P, Q, roadnet ) :
+    """
+    returns:
+    a dictionary whose keys are coordinates and whose values are local (P,Q) index queues 
+    """
+    segments = dict()
+    for _,__,road in roadnet.edges_iter( keys=True ) :
+        ensure_road( road, segments )   # these, and only these, roads are allowed
+        
+    for i, p in enumerate( P ) :
+        r,y = p
+        tree = segments[r]      # crash by design if r not in segments
+        queues = ensure_key( y, tree )
+        queues.P.append( i )
+        
+    for j, q in enumerate( Q ) :
+        r,y = q
+        tree = segments[r]
+        queues = ensure_key( y, tree )
+        queues.Q.append( j )
+        
+    return segments
+    
+    
+
+def ONESEGMENT( S, T ) :
+    roadnet = nx.MultiDiGraph()
+    roadnet.add_edge(0,1, 'line' )
+    
+    SS = ( ('line',s) for s in S )
+    TT = ( ('line',t) for t in T )
+    
+    segments = SEGMENTS( SS, TT, roadnet )
+    return segments['line']
+
+
+    
+    
+def PREMATCH( segment ) :
+    match = []
+    for y, q in segment.iter_items() :
+        annih = min( len( q.P ), len( q.Q ) )
+        for k in range( annih ) :
+            i = queues.P.pop(0)
+            j = queues.Q.pop(0)
+            match.append( (i,j) )
+            
+    return match
+
+
+
+
+""" Phase II: Solution/Verification """
+
+
+def CHECKFLOW( flow, roadnet, surplus ) :
+    balance = { u : 0. for u in roadnet.nodes_iter() }
+    for i, j, road in roadnet.edges_iter( keys=True ) :
+        balance[i] -= flow.get( road, 0. )
+        balance[j] += flow.get( road, 0. ) + surplus.get( road, 0. )
+        
+    return { k:v for k,v in balance.iteritems() if v != 0. }
+
 
 
 
@@ -176,56 +235,7 @@ class terminal :    # simple node type for TRAVERSE
 
 
 """ ALGORITHM SUB-ROUTINES """
-
-def SEGMENTS( P, Q, roadnet ) :
-    """
-    returns:
-    a dictionary whose keys are coordinates and whose values are local (P,Q) index queues 
-    """
-    segments = dict()
-    for _,__,road in roadnet.edges_iter( keys=True ) :
-        ensure_road( road, segments )   # these, and only these, roads are allowed
-        
-    for i, p in enumerate( P ) :
-        r,y = p
-        tree = segments[r]      # crash by design if r not in segments
-        queues = ensure_key( y, tree )
-        queues.P.append( i )
-        
-    for j, q in enumerate( Q ) :
-        r,y = q
-        tree = segments[r]
-        queues = ensure_key( y, tree )
-        queues.Q.append( j )
-        
-    return segments
     
-    
-
-def ONESEGMENT( S, T ) :
-    roadnet = nx.MultiDiGraph()
-    roadnet.add_edge(0,1, 'line' )
-    
-    SS = ( ('line',s) for s in S )
-    TT = ( ('line',t) for t in T )
-    
-    segments = SEGMENTS( SS, TT, roadnet )
-    return segments['line']
-
-    
-    
-    
-def PREMATCH( segment ) :
-    match = []
-    for y, q in segment.iter_items() :
-        annih = min( len( q.P ), len( q.Q ) )
-        for k in range( annih ) :
-            i = queues.P.pop(0)
-            j = queues.Q.pop(0)
-            match.append( (i,j) )
-            
-    return match
-
 
 def SURPLUS( segment ) :
     deltas = [ len( q.P ) - len( q.Q ) for y,q in segment.iter_items() ]
@@ -253,6 +263,12 @@ def MEASURE( segment, length, rbound=None ) :
         measure[f] += b - a
         
     return measure
+
+
+
+
+
+
 
 
 def INTERVALS( segment ) :      # very similar routine, used to build the walk graph
@@ -315,6 +331,8 @@ def OBJECTIVE( measure ) :
 
 
 
+
+""" Phase III: Matching Construction """
 
 
 
