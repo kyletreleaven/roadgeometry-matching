@@ -167,6 +167,58 @@ def SCORE_GRAPH( match, S, T, roadmap, pos, length_attr='length' ) :
 
 
 
+
+def SHOWTRAILS( S, T, assist, roadmap, pos, length_attr='length',
+                ax=None, **kwargs ) :
+    """
+    visualize a matching on a roadmap:
+    """
+    
+    # draw the roadmap
+    if ax is None : ax = plt.gca()
+    options = { 'edge_color' : 'g', 'alpha' : .15 }     # lightly, though...
+    options.update( kwargs )                            # but let overrides
+    drawRoadmap( roadmap, pos, ax=ax, **options )
+    ax.set_aspect('equal')  # i just really like equal aspect...
+    
+    """ The hard part is getting the edges with proper thickness """
+    # sort points onto segments
+    segments = roadbm.SEGMENTS( S, T, roadmap )
+    
+    # initialize a path graph
+    graph = nx.Graph()
+    
+    for u, v, road, data in roadmap.edges_iter( keys=True, data=True ) :
+        width = data.get( length_attr, 1 )
+        
+        def traverse() :
+            yield 0., VERTEX, u     # location, type, label
+            for y, queue in segments[road].iter_items() :
+                for s in queue.P : yield y, POINT_IN_S, s
+                for t in queue.Q : yield y, POINT_IN_T, t
+            yield width, VERTEX, v
+            
+        ITER = traverse()
+        next = ITER.next()
+        z = assist[road]    # start road assistance +0
+        for y2, type2, label2 in ITER :
+            y1, type1, label1 = next
+            graph.add_edge( (type1,label1), (type2,label2), weight=y2-y1, score=abs(z) )
+            if type2 == POINT_IN_S :
+                z += 1
+            elif type2 == POINT_IN_T :
+                z -= 1 
+            
+            next = y2, type2, label2
+            
+                        
+    SHOW_THICKNESS_GRAPH( graph, S, T, roadmap, pos, ax )
+
+            
+
+
+
+
 def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
                **kwargs ) :
     """
@@ -216,7 +268,15 @@ def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
         for ii, jj in zip( path[:-1], path[1:] ) :
             data = graph.get_edge_data( ii, jj )
             data['score'] += 1
-            
+
+    SHOW_THICKNESS_GRAPH( graph, S, T, roadmap, pos, ax )
+
+
+
+
+def SHOW_THICKNESS_GRAPH( graph, S, T, roadmap, pos, ax ) :            
+
+    # position utilities
     def vertpos(u) : return pos[u]
     def pos_from_S(u) : return position( S[u], roadmap, pos )
     def pos_from_T(u) : return position( T[u], roadmap, pos )
@@ -268,6 +328,8 @@ def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
     positions = [ position(addr, roadmap, pos).tolist() for addr in T ]
     X, Y = pointsToXY( positions )
     ax.scatter( X, Y, color='b', zorder=ZPOINTS, marker='$\circ$', **options )
+
+
 
 
 
