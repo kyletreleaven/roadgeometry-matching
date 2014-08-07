@@ -39,7 +39,7 @@ def BIPARTITEMATCH_ROADS_CONGESTED( S, T, roadmap, congestion_dict ) :
     N = len(S) - len(MATCH)     # should be a better way...?
     assist = SOLVER( roadmap, surplus_dict, measure_dict, congestion_dict, N )
     
-    if False :        # activate for debug
+    if True :        # activate for debug
         imbalance = roadbm.CHECKFLOW( assist, roadmap, surplus_dict )
     else :
         imbalance = []
@@ -50,7 +50,14 @@ def BIPARTITEMATCH_ROADS_CONGESTED( S, T, roadmap, congestion_dict ) :
         ex.imbal = imbalance
         raise ex
  
+    return assist
+
+
+
+ 
     topograph = roadbm.TOPOGRAPH( segment_dict, assist, roadmap )
+ 
+    return topograph
  
     # will need a more informative TRAVERSE method    
     try :
@@ -246,10 +253,26 @@ if __name__== '__main__' :
     import matplotlib.pyplot as plt
     plt.close('all')
 
-    # parameters
-    roadmap = nx.MultiDiGraph()
-    roadmap.add_edge(0,0,'A', length=1. )       # circle
-
+    """ parameters """
+    if False :
+        roadmap = nx.MultiDiGraph()
+        roadmap.add_edge(0,0,'A', length=1. )       # circle
+    else :
+        if False :
+            verts = [ 10*np.random.rand(2) for i in xrange(5) ]
+        else :
+            polar = lambda t : np.array([ np.cos(t), np.sin(t) ])
+            theta = np.linspace(0,2*np.pi,7+1)[:-1]
+            verts = [ 5. * polar(t) for t in theta ]
+            
+        import setiptah.roadgeometry.generation as roadgen
+        roadmap = roadgen.DelaunayRoadMap(verts)
+        
+        pos = { k : p for k, p in enumerate(verts) }
+    
+    
+    
+    
     """ congestion function """
     #rho = lambda x : np.power( x, 2. )          # square law, why not!
     rho = lambda x : abs(x)                      # linear congestion?
@@ -268,7 +291,19 @@ if __name__== '__main__' :
     # stolen form ROADSBIPARTITEMATCH    
     
     rho_dict = { road : rho for i,j,road in roadmap.edges_iter(keys=True) }
-    match = BIPARTITEMATCH_ROADS_CONGESTED( S, T, roadmap, rho_dict ) 
+    
+    
+    assist = BIPARTITEMATCH_ROADS_CONGESTED( S, T, roadmap, rho_dict )
+    assist_nocongestion = roadbm.ROADSBIPARTITEMATCH( S, T, roadmap, assist_only=True )
+    
+    import setiptah.roadbm.matchvis as matchvis
+    
+    plt.figure()
+    plt.subplot(1,2,1)
+    matchvis.SHOWTRAILS( S, T, assist, roadmap, pos ) 
+    plt.subplot(1,2,2)
+    matchvis.SHOWTRAILS( S, T, assist_nocongestion, roadmap, pos )
+
 
     if False :    
         segment_dict = roadbm.SEGMENTS( S, T, roadmap )
