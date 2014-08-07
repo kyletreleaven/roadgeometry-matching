@@ -39,7 +39,7 @@ class ROADSBIPARTITE :
     
     
 
-def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
+def ROADSBIPARTITEMATCH( P, Q, roadnet, **kwargs ) :
     MATCH = []
     
     segment_dict = SEGMENTS( P, Q, roadnet )
@@ -82,6 +82,9 @@ def ROADSBIPARTITEMATCH( P, Q, roadnet ) :
     except Exception as ex :
         ex.imbal = imbalance
         raise ex
+
+    if kwargs.get('assist_only', False ) : return assist
+    
     
     topograph = TOPOGRAPH( segment_dict, assist, roadnet )
     
