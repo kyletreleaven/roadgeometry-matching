@@ -37,7 +37,7 @@ def BIPARTITEMATCH_ROADS_CONGESTED( S, T, roadmap, congestion_dict ) :
         measure_dict[road] = measure
         
     N = len(S) - len(MATCH)     # should be a better way...?
-    assist = SOLVER( roadmap, surplus_dict, measure_dict, congestion_dict, N )
+    assist = SOLVER( roadmap, surplus_dict, measure_dict, congestion_dict )
     
     if True :        # activate for debug
         imbalance = roadbm.CHECKFLOW( assist, roadmap, surplus_dict )
@@ -79,23 +79,28 @@ def BIPARTITEMATCH_ROADS_CONGESTED( S, T, roadmap, congestion_dict ) :
 
 
 
-def SOLVER( roadnet, surplus, measure_dict, congestion_dict, N ) :
-    from setiptah.basic_graph.mygraph import mygraph
+def SOLVER( roadnet, surplus, measure_dict, congestion_dict ) :
     from setiptah.nxopt.cvxcostflow import MinConvexCostFlow
+    from setiptah.basic_graph.mygraph import mygraph
+    
+    # a rather crucial measure of the problem's complexity;
+    # see bm.SOLVER for relevant commentary
+    U = sum([ len(m) - 1 for m in measure_dict.values() ]) 
 
+    # instantiate cvxcostflow components    
     network = mygraph()
     capacity = {}
     supply = { i : 0. for i in roadnet.nodes() }
     cost = {}   # functions
     #
-    oneway_offset = {}  # for one-way roads
+    oneway_offset = {}  # to process one-way roads
     
     for i,j, road, data in roadnet.edges_iter( keys=True, data=True ) :
         supply[j] += surplus[road]
         measure = measure_dict[road]
         rho = congestion_dict[road]
                 
-        fobj = CONGESTION_OBJECTIVE( measure, rho, N )
+        fobj = CONGESTION_OBJECTIVE( measure, rho, U )  # U, here, restricts domain
         
         # edge construction
         if data.get( 'oneway', False ) :
@@ -124,8 +129,7 @@ def SOLVER( roadnet, surplus, measure_dict, congestion_dict, N ) :
             network.add_edge( (road,-1), j, i )
             cost[ (road,-1) ] = n_fobj
 
-    """ U <= N ; """
-    f = MinConvexCostFlow( network, {}, supply, cost, N )
+    f = MinConvexCostFlow( network, {}, supply, cost, U )   # U, here, determines phase count
     
     flow = {}
     for i, j, road in roadnet.edges_iter( keys=True ) :
@@ -136,7 +140,6 @@ def SOLVER( roadnet, surplus, measure_dict, congestion_dict, N ) :
             
         flow[road] = int( flow[road] )
     
-    #print flow
     return flow
 
 
@@ -148,13 +151,13 @@ def SOLVER( roadnet, surplus, measure_dict, congestion_dict, N ) :
 
 
 
-def CONGESTION_OBJECTIVE( measure, rho, N, efficient=True ) :
-    obj_data = CONGESTION_OBJECTIVE_DATA( measure, rho, N, efficient )
+def CONGESTION_OBJECTIVE( measure, rho, U, efficient=True ) :
+    obj_data = CONGESTION_OBJECTIVE_DATA( measure, rho, U, efficient )
     return RBTreeLinterp( obj_data )
 
 
 
-def CONGESTION_OBJECTIVE_DATA( measure, rho, N, efficient=True ) :
+def CONGESTION_OBJECTIVE_DATA( measure, rho, U, efficient=True ) :
         
     """ prepare convolution """
     a = measure.min_key()
@@ -175,7 +178,7 @@ def CONGESTION_OBJECTIVE_DATA( measure, rho, N, efficient=True ) :
         so, W_{n-z} = 0 for all n < a - N, and for all n > b + N
     """
     # relevant range
-    A, B = a - N, b + N
+    A, B = a - U, b + U
     L = B-A + 1
     
     alpha = {}
@@ -198,7 +201,7 @@ def CONGESTION_OBJECTIVE_DATA( measure, rho, N, efficient=True ) :
     
     # perform convolution    
     res = bintrees.RBTree()     # not just any map!
-    Z = xrange(-N,N+1)
+    Z = xrange(-U,U+1)
     
     if not efficient :
                 
@@ -215,7 +218,7 @@ def CONGESTION_OBJECTIVE_DATA( measure, rho, N, efficient=True ) :
     else :
         # efficient, FFT method
         C_fft = sig.fftconvolve( W, alpha_seq )
-        C_fix = C_fft[b-A-N:b-A+N+1]
+        C_fix = C_fft[b-A-U:b-A+U+1]
         
         res.update( zip( Z, C_fix ) )
         
@@ -300,8 +303,10 @@ if __name__== '__main__' :
     
     plt.figure()
     plt.subplot(1,2,1)
+    plt.title('Congestion Optimal')
     matchvis.SHOWTRAILS( S, T, assist, roadmap, pos ) 
     plt.subplot(1,2,2)
+    plt.title('Pure Path-length Optimal')
     matchvis.SHOWTRAILS( S, T, assist_nocongestion, roadmap, pos )
 
 
