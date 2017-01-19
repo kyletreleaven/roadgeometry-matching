@@ -9,6 +9,11 @@ setup(
 	version = "0.0.0",
 	packages = find_packages(),
 	namespace_packages = [ 'setiptah', 'setiptah.roadbm', 'setiptah.nxopt', 'setiptah.vehrouting', ],
-	install_requires = ['numpy', 'scipy', 'networkx', 'bintrees'],
+	install_requires = [
+		'numpy',
+		#'scipy', 
+		'networkx',
+		'bintrees',
+	],
 )
 
