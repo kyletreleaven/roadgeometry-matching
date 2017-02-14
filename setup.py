@@ -2,7 +2,7 @@
 from setuptools import setup, find_packages
 
 setup(
-	name = "roadmap bpmatch",
+	name = "roadbm",
 	description = "",
 	author = "Kyle Treleaven",
 	author_email = "ktreleav@gmail.com",
@@ -11,9 +11,13 @@ setup(
 	namespace_packages = [ 'setiptah', 'setiptah.roadbm', 'setiptah.nxopt', 'setiptah.vehrouting', ],
 	install_requires = [
 		'numpy',
-		#'scipy', 
+		#'scipy',
 		'networkx',
 		'bintrees',
+		# setiptah dependencies
+		'roadgeometry'
+	],
+	dependency_links = [
+		'git+https://github.com/kyletreleaven/roadgeometry.git#egg=roadgeometry',
 	],
 )
-
