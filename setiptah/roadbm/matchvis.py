@@ -1,16 +1,10 @@
-
-import itertools
-
 import numpy as np
-import bintrees
-
 import networkx as nx
 
-""" my dependencies """
-import setiptah.roadgeometry.roadmap_basic as ROAD
-import setiptah.roadgeometry.astar_basic as ASTAR
+from setiptah.roadbm import bm as roadbm
+from setiptah.roadbm.matchvis_util import position, VERTEX, POINT_IN_S, POINT_IN_T
 
-import setiptah.roadbm.bm as roadbm
+""" my dependencies """
 
 import matplotlib.pyplot as plt
 
@@ -18,10 +12,6 @@ import matplotlib.pyplot as plt
 """ CONSTANTS """
 
 """ labels for three kinds of graph nodes """
-VERTEX = 'v'
-POINT_IN_S = 'S'
-POINT_IN_T = 'T'
-
 
 ZNODES = 1
 ZLABELS = 2
@@ -34,27 +24,6 @@ ZPOINTS = 5
 
 """ convenience functions """
 
-def position( address, roadmap, pos, length_attr='length' ) :
-    """
-    get the Euclidean position of a street address,
-    given roadmap and dictionary of vertex positions
-    """
-    if isinstance( address, ROAD.RoadAddress ) :
-        road = address.road
-        coord = address.coord
-    else :
-        road, coord = address
-    coord = float( coord )
-        
-    u,v, key = ROAD.obtain_edge( roadmap, road )
-    assert key == road
-    data = ROAD.get_road_data( road, roadmap )
-    width = data.get( length_attr, 1 )
-    
-    #ROAD.get_edge_data( )
-    x = pos[u]
-    vec = pos[v] - x
-    return x + vec * coord / width
 
 def pointsToXY( points ) :
     """ split a list of (x,y) coordinates into X and Y; usually for plotting """
@@ -81,82 +50,6 @@ def drawRoadmap( roadmap, pos, ax=None, **kwargs ) :
                                   edge_labels=road_labels, zorder=ZLABELS )
     
     return ax
-
-
-
-
-def INTERVAL_GRAPH( match, S, T, roadmap, pos, length_attr='length' ) :
-    # start a "path graph" --- damn, has to be undirected...
-    digraph = nx.DiGraph()
-    skeleton = nx.Graph()
-    
-    # sort points onto segments
-    segments = roadbm.SEGMENTS( S, T, roadmap )
-    
-    for u, v, road, data in roadmap.edges_iter( keys=True, data=True ) :
-        # store coordinate of the r^+ endpoint for later use
-        length = data.get( length_attr, 1 )
-        
-        # enumerates the points on segment in a specific order
-        def traverse() :
-            yield 0., VERTEX, u     # location, type, label
-            for y, queue in segments[road].iter_items() :
-                for s in queue.P : yield y, POINT_IN_S, s
-                for t in queue.Q : yield y, POINT_IN_T, t
-            yield length, VERTEX, v
-            
-        # bigram enumeration and edge insertion
-        ITER = traverse()
-        next = ITER.next()
-        for y2, type2, label2 in ITER :
-            y1, type1, label1 = next
-            
-            # insert edge into score graph *and* skeleton graph
-            digraph.add_edge( (type1,label1), (type2,label2), score=0 )
-            skeleton.add_edge( (type1,label1), (type2,label2), length=y2-y1 )
-            
-            next = y2, type2, label2
-            
-    # for each match in the matching
-    for i, j in match :
-        # find shortest path on the *skeleton* graph, i.e., ignoring direction
-        path = nx.shortest_path( skeleton, (POINT_IN_S,i), (POINT_IN_T,j),
-                                 weight='length' )
-        
-        # direct unit score along shortest path
-        for ii, jj in zip( path[:-1], path[1:] ) :
-            # path traverses edge in the forward direction
-            if digraph.has_edge( ii, jj ) :
-                data = digraph.get_edge_data( ii, jj )
-                data['score'] += 1
-                
-            # otherwise, path traverses edge in the backward direction
-            elif digraph.has_edge( jj, ii ) :
-                data = digraph.get_edge_data( jj, ii )
-                data['score'] -= 1
-                
-                # then, reverse edge if it has negative score (only need to check if minus)
-                score = data['score']
-                if score < 0 :
-                    digraph.remove_edge( jj, ii )
-                    digraph.add_edge( ii, jj, score = -score )
-                    
-            else :
-                raise Exception('edge not found')
-            
-    def vertpos(u) : return pos[u]
-    def pos_from_S(u) : return position( S[u], roadmap, pos )
-    def pos_from_T(u) : return position( T[u], roadmap, pos )
-    switch = { VERTEX : vertpos, 
-              POINT_IN_S : pos_from_S, 
-              POINT_IN_T : pos_from_T }
-    
-    other_pos = {}
-    for uu in digraph.nodes_iter() :
-        typeu, labelu = uu
-        other_pos[uu] = switch[typeu]( labelu )
-        
-    return digraph, other_pos
 
 
 def SCORE_GRAPH( match, S, T, roadmap, pos, length_attr='length' ) :
@@ -204,9 +97,9 @@ def SHOWTRAILS( S, T, assist, roadmap, pos, length_attr='length',
         for y2, type2, label2 in ITER :
             y1, type1, label1 = next
             graph.add_edge( (type1,label1), (type2,label2), weight=y2-y1, score=abs(z) )
-            if type2 == POINT_IN_S :
+            if type2 == POINT_IN_S:
                 z += 1
-            elif type2 == POINT_IN_T :
+            elif type2 == POINT_IN_T:
                 z -= 1 
             
             next = y2, type2, label2
@@ -262,8 +155,8 @@ def SHOWMATCH( match, S, T, roadmap, pos, length_attr='length', ax=None,
             
     # add unit weight to shortest paths
     for i, j in match :
-        path = nx.shortest_path( graph, (POINT_IN_S,i), (POINT_IN_T,j),
-                                 weight='weight' )
+        path = nx.shortest_path(graph, (POINT_IN_S, i), (POINT_IN_T, j),
+                                weight='weight')
         
         for ii, jj in zip( path[:-1], path[1:] ) :
             data = graph.get_edge_data( ii, jj )
@@ -278,11 +171,11 @@ def SHOW_THICKNESS_GRAPH( graph, S, T, roadmap, pos, ax ) :
 
     # position utilities
     def vertpos(u) : return pos[u]
-    def pos_from_S(u) : return position( S[u], roadmap, pos )
-    def pos_from_T(u) : return position( T[u], roadmap, pos )
-    switch = { VERTEX : vertpos, 
-              POINT_IN_S : pos_from_S, 
-              POINT_IN_T : pos_from_T }
+    def pos_from_S(u) : return position(S[u], roadmap, pos)
+    def pos_from_T(u) : return position(T[u], roadmap, pos)
+    switch = {VERTEX: vertpos,
+              POINT_IN_S: pos_from_S,
+              POINT_IN_T: pos_from_T}
     
     other_pos = {}
     for uu in graph.nodes_iter() :
@@ -317,7 +210,7 @@ def SHOW_THICKNESS_GRAPH( graph, S, T, roadmap, pos, ax ) :
         
     # plot the points on top, so visible; this isn't working
     # show S points in red
-    positions = [ position(addr, roadmap, pos) for addr in S ]
+    positions = [position(addr, roadmap, pos) for addr in S]
     options = {
                #'marker' : 'x',
                's' : 80
@@ -325,7 +218,7 @@ def SHOW_THICKNESS_GRAPH( graph, S, T, roadmap, pos, ax ) :
     X, Y = pointsToXY( positions )
     ax.scatter( X, Y, color='r', zorder=ZPOINTS, marker='x', **options )
     # show T points in blue
-    positions = [ position(addr, roadmap, pos).tolist() for addr in T ]
+    positions = [position(addr, roadmap, pos).tolist() for addr in T]
     X, Y = pointsToXY( positions )
     ax.scatter( X, Y, color='b', zorder=ZPOINTS, marker='$\circ$', **options )
 
@@ -382,7 +275,7 @@ if __name__ == '__main__' :
     
     if False :
         addresses = [ uniform.sample() for i in xrange(M) ]
-        positions = [ position(addr, roadmap, pos) for addr in addresses ]
+        positions = [position(addr, roadmap, pos) for addr in addresses]
         
         X = [ x for x,y in positions ]
         Y = [ y for x,y in positions ]

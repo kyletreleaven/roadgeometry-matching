@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 import itertools
 
@@ -8,19 +8,9 @@ import bintrees
 import networkx as nx
 
 """ my dependencies """
-#import setiptah.roadgeometry.roadmap_basic as ROAD
-#import setiptah.roadgeometry.astar_basic as ASTAR
-#import setiptah.roadbm.bm as roadbm
-
+from setiptah.roadbm import matchvis_util
 
 import matplotlib.pyplot as plt
-import setiptah.roadbm.matchvis as matchvis
-
-
-
-
-
-
 
 
 def SANITIZE( I_graph ) :
@@ -42,13 +32,13 @@ def INITIALIZE_BAGS( I_graph ) :
         
         data.update( S=[], T=[] )
         
-        if typei == matchvis.VERTEX :
+        if typei == matchvis_util.VERTEX:
             continue
         
-        elif typei == matchvis.POINT_IN_S :
+        elif typei == matchvis_util.POINT_IN_S:
             data['S'].append( labeli )
             
-        elif typei == matchvis.POINT_IN_T :
+        elif typei == matchvis_util.POINT_IN_T:
             data['T'].append( labeli )
             
         else :
@@ -138,15 +128,15 @@ def DISPLAY_STATE( I_graph, pos, active_node=None ) :
         if i == active_node :
             active.append( i )
         
-        elif typei == matchvis.VERTEX :
+        elif typei == matchvis_util.VERTEX:
             interchanges.append( i )
             interchange_labels[i] = labeli
             
-        elif typei == matchvis.POINT_IN_S :
+        elif typei == matchvis_util.POINT_IN_S:
             #data.update( S = [ labeli ], T = [] )
             other.append( i )
             
-        elif typei == matchvis.POINT_IN_T :
+        elif typei == matchvis_util.POINT_IN_T:
             #data.update( S = [], T = [ labeli ] )
             other.append( i )
             
@@ -252,15 +242,15 @@ def DISPLAY_STATE_TIKZ( I_graph, pos, MATCH=None, active_node=None ) :
         if i == active_node :
             active.append( i )
         
-        elif typei == matchvis.VERTEX :
+        elif typei == matchvis_util.VERTEX:
             interchanges.append( i )
             interchange_labels[i] = labeli
             
-        elif typei == matchvis.POINT_IN_S :
+        elif typei == matchvis_util.POINT_IN_S:
             #data.update( S = [ labeli ], T = [] )
             other.append( i )
             
-        elif typei == matchvis.POINT_IN_T :
+        elif typei == matchvis_util.POINT_IN_T:
             #data.update( S = [], T = [ labeli ] )
             other.append( i )
             
@@ -423,7 +413,7 @@ if __name__ == '__main__' :
     opt_match = roadbm.ROADSBIPARTITEMATCH( SS, TT, roadmap )
     
     """ obtain an interval graph from the matching """
-    I_graph, I_pos = matchvis.INTERVAL_GRAPH( opt_match, SS, TT, roadmap, pos )
+    I_graph, I_pos = matchvis_util.INTERVAL_GRAPH(opt_match, SS, TT, roadmap, pos)
     # sometimes, there's still a cycle?
     
     
